@@ -1,5 +1,6 @@
 import os
 import json
+import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -56,3 +57,9 @@ class IngestionPipeline:
         if raw_data:
             processed_data = self.parse_data(url, raw_data)
             await self.ingest_to_db(url, processed_data)
+
+    async def ingest_match_records(self, match_data: pd.DataFrame):
+        # Implementation for structured data mapping
+        print(f"Ingesting {len(match_data)} matches to DB...")
+        # For now, this is a placeholder that will be completed by the historical loader
+        pass
