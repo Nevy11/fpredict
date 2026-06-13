@@ -11,7 +11,7 @@ class SentimentAnalyzer:
     Analyzes raw text for football-related sentiment using Gemini.
     """
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-1.5-flash-lite')
+        self.model = genai.GenerativeModel('gemini-flash-latest')
 
     def analyze(self, text: str):
         """

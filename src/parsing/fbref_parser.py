@@ -16,9 +16,8 @@ class FBrefParser:
         # FBref tables are often wrapped in div#all_stats_standard
         # Using pandas read_html is the most efficient way to handle these tables
         try:
-            dfs = pd.read_html(io.StringIO(str(soup)))
-            # Usually the first table is the one we want, 
-            # but we might need to be specific based on the page structure.
+            # Explicitly using lxml flavor for better performance and reliability
+            dfs = pd.read_html(io.StringIO(str(soup)), flavor='lxml')
             return dfs[0]
         except Exception as e:
             print(f"Error parsing FBref table: {e}")

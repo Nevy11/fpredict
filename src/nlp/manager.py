@@ -1,4 +1,5 @@
 import os
+import psycopg2
 from dotenv import load_dotenv
 from supabase import create_client
 from .sentiment import SentimentAnalyzer
@@ -11,24 +12,24 @@ class NLPManager:
     def __init__(self):
         self.supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         self.analyzer = SentimentAnalyzer()
+        self.local_conn = psycopg2.connect(f"dbname=fpredict_db user={os.getenv('DB_USER')} password={os.getenv('DB_PASSWORD')} host=localhost")
 
-    def process_unprocessed_news(self):
-        # 1. Fetch unprocessed records
-        response = self.supabase.table("unstructured_news")\
-            .select("*").eq("processed", False).execute()
-        
-        news_items = response.data
-        print(f"Found {len(news_items)} news items to process.")
+    def process_unprocessed_news_local(self):
+        print("Processing news from local DB...")
+        with self.local_conn.cursor() as cur:
+            cur.execute("SELECT id, raw_text FROM unstructured_news WHERE processed = FALSE")
+            news_items = cur.fetchall()
+            print(f"Found {len(news_items)} news items to process locally.")
 
-        # 2. Analyze and update
-        for item in news_items:
-            score = self.analyzer.analyze(item['raw_text'])
-            print(f"Processed item {item['id']}: Sentiment={score}")
-            
-            self.supabase.table("unstructured_news").update({
-                "sentiment_score": score,
-                "processed": True
-            }).eq("id", item['id']).execute()
+            for item_id, text in news_items:
+                score = self.analyzer.analyze(text)
+                print(f"Processed item {item_id}: Sentiment={score}")
+                
+                cur.execute(
+                    "UPDATE unstructured_news SET sentiment_score = %s, processed = TRUE WHERE id = %s",
+                    (score, item_id)
+                )
+            self.local_conn.commit()
 
 if __name__ == "__main__":
     manager = NLPManager()
