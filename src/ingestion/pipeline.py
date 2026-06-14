@@ -58,8 +58,32 @@ class IngestionPipeline:
             processed_data = self.parse_data(url, raw_data)
             await self.ingest_to_db(url, processed_data)
 
-    async def ingest_match_records(self, match_data: pd.DataFrame):
-        # Implementation for structured data mapping
-        print(f"Ingesting {len(match_data)} matches to DB...")
-        # For now, this is a placeholder that will be completed by the historical loader
-        pass
+    async def fetch_latest_news(self, team_name: str):
+        """
+        Dynamically fetches latest news for a specific team from a news aggregator.
+        """
+        print(f"[INGEST] Searching for latest news on {team_name}...")
+        # Using a simple RSS feed or news aggregator URL pattern
+        search_query = team_name.replace(' ', '+')
+        url = f"https://www.bing.com/news/search?q={search_query}+football+EPL"
+        
+        raw_html = await self.fast_scraper.get_raw_data(url)
+        if not raw_html: return
+        
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(raw_html, 'html.parser')
+        # Extract the first few headlines
+        headlines = []
+        for card in soup.find_all('a', class_='title', limit=3):
+            headlines.append(card.text.strip())
+            
+        if not headlines:
+            # Fallback to simple extraction
+            for link in soup.find_all('a', href=True, limit=5):
+                if len(link.text) > 30:
+                    headlines.append(link.text.strip())
+        
+        for h in list(set(headlines))[:3]:
+            await self.ingest_to_db(f"Live Scrape: {team_name}", h)
+        
+        print(f"[INGEST] Successfully added {len(headlines)} fresh headlines for {team_name}.")

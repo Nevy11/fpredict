@@ -153,23 +153,42 @@ class _QuantumLabTabState extends State<QuantumLabTab> {
   Future<void> _requestPrediction() async {
     if (_homeTeamId == null || _awayTeamId == null) return;
     
-    setState(() => _isProcessing = true);
+    setState(() {
+      _isProcessing = true;
+      _prediction = null; // Clear previous result
+    });
     
-    // 1. Submit Request to Supabase
-    await client.from('prediction_requests').insert({
+    // 1. Submit Request
+    final insertResponse = await client.from('prediction_requests').insert({
       'home_team_id': _homeTeamId,
       'away_team_id': _awayTeamId,
       'status': 'PENDING'
-    });
+    }).select().single();
 
-    // 2. Wait for completion (Simple polling for demo, ideally uses stream)
-    // We'll wait 5 seconds then check predictions table
-    await Future.delayed(const Duration(seconds: 6));
-    
+    final requestId = insertResponse['id'];
+
+    // 2. Poll for Completion (Wait for AI Brain)
+    bool isDone = false;
+    int attempts = 0;
+    while (!isDone && attempts < 30) { // Increased to 30 attempts (60 seconds)
+      await Future.delayed(const Duration(seconds: 2));
+      final statusRes = await client
+          .from('prediction_requests')
+          .select('status')
+          .eq('id', requestId)
+          .single();
+      
+      if (statusRes['status'] == 'COMPLETED') {
+        isDone = true;
+      }
+      attempts++;
+    }
+
+    // 3. Fetch the EXACT prediction linked to this specific request
     final response = await client
         .from('predictions')
         .select()
-        .order('prediction_date', ascending: false)
+        .eq('version_id', 'live-$requestId')
         .limit(1);
     
     if (response.isNotEmpty) {
@@ -178,24 +197,31 @@ class _QuantumLabTabState extends State<QuantumLabTab> {
         _isProcessing = false;
       });
     } else {
+      print('Warning: Prediction not found for requestId: $requestId');
       setState(() => _isProcessing = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text('Interactive Match Simulation', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const Text('Select two teams to generate quantum insights.', style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 24),
-        _buildTeamSelectors(),
-        const SizedBox(height: 24),
-        _buildActionButton(),
-        const SizedBox(height: 32),
-        if (_prediction != null) _buildResultView(),
-      ],
+    return RefreshIndicator(
+      onRefresh: () async {
+        // Force re-fetch of data
+        setState(() {});
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('Interactive Match Simulation', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text('Select two teams to generate quantum insights.', style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 24),
+          _buildTeamSelectors(),
+          const SizedBox(height: 24),
+          _buildActionButton(),
+          const SizedBox(height: 32),
+          if (_prediction != null) _buildResultView(),
+        ],
+      ),
     );
   }
 
@@ -268,7 +294,7 @@ class _QuantumLabTabState extends State<QuantumLabTab> {
             ],
           ),
           const SizedBox(height: 16),
-          Text(_prediction!['tactical_narrative'], style: const TextStyle(fontSize: 16, height: 1.4)),
+          Text(_prediction!['tactical_narrative'] ?? 'Analysis complete.', style: const TextStyle(fontSize: 16, height: 1.4)),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -276,6 +302,14 @@ class _QuantumLabTabState extends State<QuantumLabTab> {
               _buildMetric('Home Win', '${((probs['home'] ?? 0) * 100).toInt()}%'),
               _buildMetric('Draw', '${((probs['draw'] ?? 0) * 100).toInt()}%'),
               _buildMetric('Away Win', '${((probs['away'] ?? 0) * 100).toInt()}%'),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _buildMetric('Kelly Stake', '${((_prediction!['kelly_stake'] ?? 0) * 100).toStringAsFixed(1)}%'),
+              const Spacer(),
+              _buildMetric('Advantage', '+${((_prediction!['edge_value'] ?? 0) * 100).toStringAsFixed(1)}%'),
             ],
           ),
         ],

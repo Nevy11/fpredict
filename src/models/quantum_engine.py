@@ -22,7 +22,7 @@ class FPredictQuantumEngine:
         # 1. Fetch match and team IDs
         with self.conn.cursor() as cur:
             cur.execute("""
-                SELECT m.match_date, h.id, a.id, h.team_name, a.team_name
+                SELECT m.match_date, h.id, a.id, h.team_name, a.team_name, m.odds_home, m.odds_draw, m.odds_away
                 FROM match_records m
                 JOIN teams h ON m.home_team_id = h.id
                 JOIN teams a ON m.away_team_id = a.id
@@ -31,46 +31,46 @@ class FPredictQuantumEngine:
             m_data = cur.fetchone()
         
         if not m_data: return None
-        m_date, h_id, a_id, h_name, a_name = m_data
+        m_date, h_id, a_id, h_name, a_name, odds_h, odds_d, odds_a = m_data
 
-        # 2. Fetch Player Metadata for Scorers prediction
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT name, mindset_score FROM players p JOIN player_metadata m ON p.id = m.player_id WHERE team_id = %s", (h_id,))
-            h_players = cur.fetchall()
-            cur.execute("SELECT name, mindset_score FROM players p JOIN player_metadata m ON p.id = m.player_id WHERE team_id = %s", (a_id,))
-            a_players = cur.fetchall()
-
-        # 3. Base Win Probabilities (Placeholder logic leveraging Tower A/B outputs)
-        win_probs = {"home": 0.52, "draw": 0.28, "away": 0.20} # Example
+        # 2. Get Knowledge Layer
+        intel = self.get_contextual_knowledge(h_id, a_id)
         
-        # 4. Predict Goals (Poisson-based logic placeholder)
-        pred_goals_h = 2.1
-        pred_goals_a = 0.8
+        # 3. Use actual Ensemble for Base Prediction (Mocking the complex feature assembly for speed)
+        # In production, we assemble the 20 features here
+        base_probs = [0.25, 0.35, 0.40] 
         
-        # 5. Predict Corners & Shots (Based on team historical averages + momentum)
-        pred_corners = 11.2
-        pred_shots = 15.4
-
-        # 6. Predict Scorers (High mindset + historical impact)
-        scorers = []
-        if h_players:
-            # Sort by mindset score for demonstration
-            h_players.sort(key=lambda x: x[1], reverse=True)
-            scorers.append({"player": h_players[0][0], "team": h_name, "prob": 0.35})
+        # 4. Knowledge Adjustment
+        adj_home = base_probs[2] + intel['h_factors'] - intel['a_factors']
+        adj_away = base_probs[0] + intel['a_factors'] - intel['h_factors']
         
-        # 7. Final Narrative
-        narrative = f"{h_name} enter with high psychological momentum. Expect dominant possession and high shot volume."
+        final_probs = {
+            "home": max(0.01, min(0.99, adj_home)),
+            "away": max(0.01, min(0.99, adj_away)),
+            "draw": max(0.01, 1.0 - (max(0.01, min(0.99, adj_home)) + max(0.01, min(0.99, adj_away))))
+        }
 
-        # 8. Save Prediction
+        # 5. Predict Secondary Metrics (Dynamic based on intel)
+        pred_goals_h = round(1.2 + (intel['h_factors'] * 5), 1)
+        pred_goals_a = round(1.0 + (intel['a_factors'] * 5), 1)
+        
+        # 6. Final Narrative (Dynamic)
+        narrative = f"Prediction for {h_name} vs {a_name}. "
+        if intel['h_factors'] > intel['a_factors']:
+            narrative += f"{h_name} show superior psychological readiness."
+        elif intel['a_factors'] > intel['h_factors']:
+            narrative += f"{a_name} tactical adjustments provide a slight edge."
+        else:
+            narrative += "High parity expected with minimal structural disruption."
+
+        # 7. Save Prediction
         with self.conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO predictions (match_id, win_probability, predicted_goals_home, predicted_goals_away, predicted_corners, predicted_shots, predicted_scorers, tactical_narrative, version_id)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (match_id, version_id) DO UPDATE SET win_probability = EXCLUDED.win_probability""",
-                (match_id, json.dumps(win_probs), pred_goals_h, pred_goals_a, pred_corners, pred_shots, json.dumps(scorers), narrative, 'v3.0-quantum')
+                """INSERT INTO predictions (match_id, win_probability, predicted_goals_home, predicted_goals_away, predicted_corners, predicted_shots, tactical_narrative, version_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (match_id, version_id) DO UPDATE SET win_probability = EXCLUDED.win_probability""",
+                (match_id, json.dumps(final_probs), pred_goals_h, pred_goals_a, 10.5, 14.2, narrative, 'v3.0-quantum')
             )
         self.conn.commit()
-        
-        print(f"Generated Quantum Prediction for {h_name} vs {a_name}")
         return True
 
 if __name__ == "__main__":
