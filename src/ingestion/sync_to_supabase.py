@@ -52,7 +52,10 @@ if __name__ == "__main__":
         "unstructured_news", 
         "feature_store", 
         "player_impact_metrics", 
-        "player_performance"
+        "player_performance",
+        "player_metadata",
+        "predictions",
+        "prediction_requests"
     ]
     for table in tables:
         syncer.sync_table(table)

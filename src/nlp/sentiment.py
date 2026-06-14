@@ -6,25 +6,31 @@ from dotenv import load_dotenv
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-class SentimentAnalyzer:
+class KnowledgeExtractor:
     """
-    Analyzes raw text for football-related sentiment using Gemini.
+    Advanced NLP Tower: Extracts granular player/team tactical knowledge using Gemini.
     """
     def __init__(self):
         self.model = genai.GenerativeModel('gemini-flash-latest')
 
-    def analyze(self, text: str):
+    def extract_knowledge(self, text: str):
         """
-        Rates sentiment on a scale of -0.05 (negative) to +0.05 (positive).
+        Extracts structured facts: {entity, factor_type, impact_score, description}.
         """
         prompt = (
-            f"Analyze the following EPL news text and return ONLY a single float "
-            f"value between -0.05 and +0.05 based on the expected impact on "
-            f"team performance: '{text}'"
+            f"Analyze this EPL news: '{text}'. "
+            f"Extract technical insights. Return a JSON object with: "
+            f"1. entity (Player/Team name), "
+            f"2. factor_type (Training Intensity, Psychology, Skill Improvement, Injury), "
+            f"3. impact_score (-0.1 to 0.1), "
+            f"4. affected_metric (Goals, Defense, Set-pieces). "
+            f"Return ONLY valid JSON."
         )
         
         response = self.model.generate_content(prompt)
         try:
-            return float(response.text.strip())
-        except ValueError:
-            return 0.0 # Neutral fallback
+            # Basic cleanup of markdown JSON blocks if present
+            clean_json = response.text.replace('```json', '').replace('```', '').strip()
+            return json.loads(clean_json)
+        except:
+            return None

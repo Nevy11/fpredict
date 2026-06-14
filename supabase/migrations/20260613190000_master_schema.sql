@@ -100,4 +100,50 @@ CREATE INDEX IF NOT EXISTS idx_news_processed ON unstructured_news(processed);
 CREATE INDEX IF NOT EXISTS idx_player_perf_match ON player_performance(match_id);
 CREATE INDEX IF NOT EXISTS idx_squad_membership_team ON squad_membership(team_id, joined_date, left_date);
 CREATE INDEX IF NOT EXISTS idx_player_impact ON player_impact_metrics(player_id, snapshot_date);
+
+-- Add understat_id columns
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS understat_id VARCHAR(100);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS understat_id VARCHAR(100);
+ALTER TABLE match_records ADD COLUMN IF NOT EXISTS understat_id VARCHAR(100);
+
+-- Expanded Player Metadata
+CREATE TABLE IF NOT EXISTS player_metadata (
+    player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+    age INT,
+    is_captain BOOLEAN DEFAULT FALSE,
+    international_status JSONB DEFAULT '{}'::jsonb,
+    mindset_score NUMERIC(3,2) DEFAULT 0.0,
+    skill_tags JSONB DEFAULT '[]'::jsonb,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Comprehensive Predictions Table
+CREATE TABLE IF NOT EXISTS predictions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES match_records(id) ON DELETE CASCADE,
+    prediction_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    win_probability JSONB,
+    predicted_goals_home NUMERIC(3,2),
+    predicted_goals_away NUMERIC(3,2),
+    predicted_corners NUMERIC(4,2),
+    predicted_shots NUMERIC(4,2),
+    predicted_scorers JSONB DEFAULT '[]'::jsonb,
+    tactical_narrative TEXT,
+    version_id VARCHAR(50),
+    UNIQUE(match_id, version_id)
+);
+
+-- Match-Up History
+CREATE TABLE IF NOT EXISTS h2h_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_a UUID REFERENCES teams(id),
+    team_b UUID REFERENCES teams(id),
+    total_matches INT,
+    a_wins INT,
+    b_wins INT,
+    avg_goals NUMERIC(3,2),
+    UNIQUE(team_a, team_b)
+);
+
+-- Reload Schema
 NOTIFY pgrst, 'reload schema';
