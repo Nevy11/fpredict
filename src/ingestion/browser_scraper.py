@@ -31,17 +31,19 @@ class BrowserScraper(BaseScraper):
             
             try:
                 # 1. Initial visit
-                await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=120000)
                 
-                # 2. Add human-like jitter
-                await asyncio.sleep(5) 
-                await page.mouse.move(500, 500)
-                await page.evaluate("window.scrollTo(0, 500)")
+                # 2. Advanced Human-like jitter
+                for _ in range(5):
+                    await page.mouse.wheel(0, 200)
+                    await asyncio.sleep(1)
+                    await page.mouse.move(500, 500)
                 
-                # 3. Wait for the specific FBref or Understat selectors
-                if "fbref.com" in url:
-                    await page.wait_for_selector("table", timeout=30000)
-                
+                # 3. Wait for content
+                try:
+                    await page.wait_for_selector("table", timeout=60000)
+                except:
+                    print("Warning: Content table not found after 60s.")
                 content = await page.content()
                 print(f"Successfully fetched {len(content)} characters.")
                 return content

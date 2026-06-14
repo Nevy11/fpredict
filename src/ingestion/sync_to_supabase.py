@@ -44,6 +44,15 @@ class SupabaseSyncer:
 
 if __name__ == "__main__":
     syncer = SupabaseSyncer()
-    tables = ["teams", "players", "squad_membership", "match_records", "unstructured_news", "feature_store"]
+    tables = [
+        "teams", 
+        "players", 
+        "squad_membership", 
+        "match_records", 
+        "unstructured_news", 
+        "feature_store", 
+        "player_impact_metrics", 
+        "player_performance"
+    ]
     for table in tables:
         syncer.sync_table(table)

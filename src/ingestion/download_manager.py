@@ -30,7 +30,11 @@ class DownloadManager:
 
 if __name__ == "__main__":
     manager = DownloadManager()
-    # Targeting the last 5 seasons
-    seasons = ["2425", "2324", "2223", "2122", "2021"]
+    # Targeting 15 seasons to reach 5,000+ matches
+    seasons = [
+        "2425", "2324", "2223", "2122", "2021", 
+        "1920", "1819", "1718", "1617", "1516", 
+        "1415", "1314", "1213", "1112", "1011"
+    ]
     for season in seasons:
         manager.download_epl_season(season)

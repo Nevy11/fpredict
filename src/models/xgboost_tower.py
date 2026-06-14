@@ -26,38 +26,43 @@ class XGBoostTower:
         )
 
     def load_training_data(self):
-        print("Loading training data from Feature Store...")
+        print("Loading high-resolution training data from Feature Store...")
         query = """
             SELECT 
                 h.features->>'elo_rating' as h_elo,
                 h.features->>'squad_power' as h_squad_power,
                 h.features->>'sdi' as h_sdi,
                 h.features->>'form_ppg' as h_form_ppg,
+                h.features->>'form_gd' as h_form_gd,
                 h.features->>'sentiment_score' as h_sentiment,
                 a.features->>'elo_rating' as a_elo,
                 a.features->>'squad_power' as a_squad_power,
                 a.features->>'sdi' as a_sdi,
                 a.features->>'form_ppg' as a_form_ppg,
+                a.features->>'form_gd' as a_form_gd,
                 a.features->>'sentiment_score' as a_sentiment,
                 m.odds_home, m.odds_draw, m.odds_away,
                 m.match_date,
                 m.home_goals,
                 m.away_goals
             FROM match_records m
-            JOIN feature_store h ON m.home_team_id = h.team_id
-            JOIN feature_store a ON m.away_team_id = a.team_id
+            JOIN feature_store h ON m.home_team_id = h.team_id AND m.match_date = h.snapshot_date
+            JOIN feature_store a ON m.away_team_id = a.team_id AND m.match_date = a.snapshot_date
             ORDER BY m.match_date ASC
         """
         df = pd.read_sql(query, self.conn)
         
         # 1. Cast features to float
-        cols = ['h_elo', 'h_squad_power', 'h_sdi', 'h_form_ppg', 'h_sentiment', 'a_elo', 'a_squad_power', 'a_sdi', 'a_form_ppg', 'a_sentiment', 'odds_home', 'odds_draw', 'odds_away']
+        cols = ['h_elo', 'h_squad_power', 'h_sdi', 'h_form_ppg', 'h_form_gd', 'h_sentiment', 
+                'a_elo', 'a_squad_power', 'a_sdi', 'a_form_ppg', 'a_form_gd', 'a_sentiment', 
+                'odds_home', 'odds_draw', 'odds_away']
         for col in cols:
             df[col] = df[col].astype(float)
         
         # 2. Engineered Features
         df['elo_diff'] = df['h_elo'] - df['a_elo']
         df['form_diff'] = df['h_form_ppg'] - df['a_form_ppg']
+        df['gd_diff'] = df['h_form_gd'] - df['a_form_gd']
         df['sentiment_diff'] = df['h_sentiment'] - df['a_sentiment']
         df['match_month'] = pd.to_datetime(df['match_date']).dt.month
         
@@ -66,7 +71,7 @@ class XGBoostTower:
         df.loc[df['home_goals'] > df['away_goals'], 'target'] = 2
         df.loc[df['home_goals'] < df['away_goals'], 'target'] = 0
         
-        feature_cols = cols + ['elo_diff', 'form_diff', 'sentiment_diff', 'match_month']
+        feature_cols = cols + ['elo_diff', 'form_diff', 'gd_diff', 'sentiment_diff', 'match_month']
         return df[feature_cols], df['target']
 
     def train(self):
@@ -97,11 +102,19 @@ class XGBoostTower:
         preds = self.model.predict(X_test)
         acc = accuracy_score(y_test, preds)
         print(f"XGBoost Tower A Training Complete. New Accuracy: {acc:.2%}")
+        self.save_model()
 
-    def predict_probs(self, squad_power, sdi):
-        """Returns [Away%, Draw%, Home%]"""
-        input_df = pd.DataFrame([[squad_power, sdi]], columns=['squad_power', 'sdi'])
-        return self.model.predict_proba(input_df)[0]
+    def save_model(self, path="src/models/tower_a.json"):
+        self.model.save_model(path)
+        print(f"Tower A saved to {path}")
+
+    def load_model(self, path="src/models/tower_a.json"):
+        self.model = xgb.XGBClassifier()
+        self.model.load_model(path)
+        print(f"Tower A loaded from {path}")
+
+    def predict_probs(self, features):
+        return self.model.predict_proba(features)[0]
 
 if __name__ == "__main__":
     tower = XGBoostTower()

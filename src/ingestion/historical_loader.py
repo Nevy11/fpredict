@@ -57,26 +57,31 @@ class HistoricalLoader:
         return None
 
     def load_file(self, file_path):
+        # Read with flexible date parsing
         df = pd.read_csv(file_path)
         print(f"Loading {len(df)} rows from {file_path}...")
         
         for _, row in df.iterrows():
             try:
+                # Handle potential NaN or empty team names
+                if pd.isna(row.get('HomeTeam')) or pd.isna(row.get('AwayTeam')):
+                    continue
+                    
                 # 1. Get IDs for BOTH databases
-                local_h_id = self.get_local_team_id(row['HomeTeam'])
-                local_a_id = self.get_local_team_id(row['AwayTeam'])
+                local_h_id = self.get_local_team_id(str(row['HomeTeam']))
+                local_a_id = self.get_local_team_id(str(row['AwayTeam']))
                 
-                sb_h_id = self.get_supabase_team_id(row['HomeTeam'])
-                sb_a_id = self.get_supabase_team_id(row['AwayTeam'])
+                sb_h_id = self.get_supabase_team_id(str(row['HomeTeam']))
+                sb_a_id = self.get_supabase_team_id(str(row['AwayTeam']))
                 
                 match_date = pd.to_datetime(row['Date'], dayfirst=True).strftime('%Y-%m-%d')
                 fthg = int(row['FTHG'])
                 ftag = int(row['FTAG'])
                 
-                # New: Extract Odds (using Bet365 as the primary source from this CSV)
-                odds_h = float(row.get('B365H', 0))
-                odds_d = float(row.get('B365D', 0))
-                odds_a = float(row.get('B365A', 0))
+                # Extract Odds
+                odds_h = float(row.get('B365H', 0)) if not pd.isna(row.get('B365H')) else 0.0
+                odds_d = float(row.get('B365D', 0)) if not pd.isna(row.get('B365D')) else 0.0
+                odds_a = float(row.get('B365A', 0)) if not pd.isna(row.get('B365A')) else 0.0
                 
                 # 2. Insert Local
                 with self.local_conn.cursor() as cur:
@@ -106,6 +111,7 @@ class HistoricalLoader:
                         print(f"Warning: Supabase match insert failed: {e}")
             except Exception as e:
                 print(f"Error loading row: {e}")
+                self.local_conn.rollback() # Crucial: Reset the transaction state on failure
                 continue
                 
         print(f"Finished loading {file_path}")
