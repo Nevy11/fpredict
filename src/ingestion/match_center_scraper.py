@@ -37,14 +37,38 @@ class MatchCenterScraper:
         html = await self.scraper.get_raw_data(url)
         if not html: return []
         
-        # Search for datesData in the scripts
-        pattern = re.compile(r"JSON\.parse\(['\"](.+?)['\"]\)")
-        matches = pattern.findall(html)
-        for m in matches:
-            decoded = bytes(m, "utf-8").decode("unicode_escape")
-            if 'datesData' in decoded:
-                return json.loads(decoded)
-        return []
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        matches = []
+        # Find all match links
+        match_links = soup.find_all('a', class_='match-info', href=True)
+        for link in match_links:
+            m_id = link['href'].split('/')[-1]
+            is_result = link.get('data-isresult') == 'true'
+            
+            # Find parent or siblings for team names
+            parent = link.find_parent('div', class_='calendar-game')
+            if not parent: continue
+            
+            h_team = parent.find('div', class_='team-home').text.strip()
+            a_team = parent.find('div', class_='team-away').text.strip()
+            
+            # Find date - usually in a sibling div or similar
+            # For simplicity, we'll try to get it from the link or surrounding
+            # But Understat date is often in a specific div
+            m_date = "" # We'll need to find where date is stored
+            
+            matches.append({
+                'id': m_id,
+                'isResult': is_result,
+                'h': {'title': h_team},
+                'a': {'title': a_team},
+                'datetime': '' # We'll need to handle this or find it
+            })
+            
+        print(f"Extracted {len(matches)} matches from HTML.")
+        return matches
 
     async def ingest_match_performance(self, understat_match_id, match_date, h_name, a_name):
         url = f"https://understat.com/match/{understat_match_id}"
