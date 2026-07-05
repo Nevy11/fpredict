@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 from src.models.ensemble import FPredictEngine
 from src.models.simulator import FPredictSimulator
+from src.models.manager_engine import ManagerPredictionEngine
+from src.managers.repository import ManagerRepository
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
@@ -27,6 +29,20 @@ app.add_middleware(
 )
 
 engine = FPredictEngine()
+_manager_engine = None
+_manager_repo = None
+
+def get_manager_engine():
+    global _manager_engine
+    if _manager_engine is None:
+        _manager_engine = ManagerPredictionEngine()
+    return _manager_engine
+
+def get_manager_repo():
+    global _manager_repo
+    if _manager_repo is None:
+        _manager_repo = ManagerRepository()
+    return _manager_repo
 
 TEAM_NAME_MAPPING = {
     "Brighton & Hove Albion": "Brighton",
@@ -101,6 +117,12 @@ class BacktestRequest(BaseModel):
     season: str = "2023/24"
     initial_bankroll: float = 1000.0
     kelly_fraction: float = 0.5
+
+class ManagerPredictionRequest(BaseModel):
+    home_team: str
+    away_team: str
+    home_manager: str | None = None
+    away_manager: str | None = None
 
 def resolve_db_team_name(team_name: str) -> str:
     return TEAM_NAME_MAPPING.get(team_name, team_name)
@@ -207,6 +229,54 @@ def run_backtest(request: BacktestRequest):
     except Exception as e:
         print(f"Backtest Error: {e}")
         raise HTTPException(status_code=500, detail="Backtest simulation failed")
+
+@app.get("/managers/lookup")
+def lookup_managers(home_team: str, away_team: str):
+    db_home = resolve_db_team_name(home_team)
+    db_away = resolve_db_team_name(away_team)
+    repo = get_manager_repo()
+    try:
+        return repo.lookup_match_managers(db_home, db_away)
+    except Exception as error:
+        print(f"Manager lookup error: {error}")
+        raise HTTPException(status_code=500, detail="Unable to resolve current managers")
+
+@app.get("/managers/{manager_name}/profile")
+def get_manager_profile(manager_name: str):
+    repo = get_manager_repo()
+    return repo.get_profile(manager_name)
+
+@app.post("/predict/manager")
+def predict_with_manager(request: ManagerPredictionRequest):
+    db_home = resolve_db_team_name(request.home_team)
+    db_away = resolve_db_team_name(request.away_team)
+    h_features = get_team_features(request.home_team)
+    a_features = get_team_features(request.away_team)
+    odds = get_match_odds(request.home_team, request.away_team, h_features["elo"], a_features["elo"])
+    history = get_historical_matches(request.home_team, request.away_team)
+
+    try:
+        manager_engine = get_manager_engine()
+        result = manager_engine.predict(
+            db_home,
+            db_away,
+            h_features,
+            a_features,
+            odds,
+            home_manager_name=request.home_manager,
+            away_manager_name=request.away_manager,
+        )
+    except Exception as error:
+        print(f"Manager prediction error: {error}")
+        raise HTTPException(status_code=500, detail="Manager prediction failed")
+
+    return {
+        **result,
+        "odds": odds,
+        "home_features": h_features,
+        "away_features": a_features,
+        "historical_matches": history,
+    }
 
 def get_historical_matches(home_name: str, away_name: str, limit: int = 5):
     db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
