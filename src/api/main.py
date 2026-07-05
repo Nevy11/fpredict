@@ -1,6 +1,8 @@
 import os
 import psycopg2
-from fastapi import FastAPI, HTTPException
+import asyncio
+import random
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -224,6 +226,24 @@ def predict(request: PredictionRequest):
         "away_features": a_features,
         "historical_matches": history
     }
+
+@app.websocket("/ws/odds")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            await asyncio.sleep(random.uniform(2.0, 5.0))
+            # Shift odds slightly by +/- 0.05
+            shift_home = round(random.uniform(-0.05, 0.05), 2)
+            shift_draw = round(random.uniform(-0.05, 0.05), 2)
+            shift_away = round(random.uniform(-0.05, 0.05), 2)
+            await websocket.send_json({
+                "home": shift_home,
+                "draw": shift_draw,
+                "away": shift_away
+            })
+    except WebSocketDisconnect:
+        pass
 
 if __name__ == "__main__":
     import uvicorn
