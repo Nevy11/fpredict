@@ -79,6 +79,38 @@ class PredictionResponse(BaseModel):
     away: float
 
 def get_match_odds(home_name: str, away_name: str, elo_home: float, elo_away: float):
+    # 1. Try to fetch live odds from The Odds API (Reliable Source)
+    odds_api_key = os.getenv("ODDS_API_KEY")
+    if odds_api_key:
+        try:
+            import httpx
+            # Fetch EPL odds
+            url = f"https://api.the-odds-api.com/v4/sports/soccer_epl/odds/?apiKey={odds_api_key}&regions=uk&markets=h2h"
+            response = httpx.get(url, timeout=5.0)
+            if response.status_code == 200:
+                events = response.json()
+                for event in events:
+                    # Very simple string matching to find the right event
+                    if home_name[:5].lower() in event['home_team'].lower() or away_name[:5].lower() in event['away_team'].lower():
+                        # Find Pinnacle or the first available bookmaker
+                        bookmakers = event.get('bookmakers', [])
+                        if bookmakers:
+                            markets = bookmakers[0].get('markets', [])
+                            for market in markets:
+                                if market['key'] == 'h2h':
+                                    outcomes = market['outcomes']
+                                    # the-odds-api returns Name: Price
+                                    odds_dict = {o['name']: o['price'] for o in outcomes}
+                                    h_odd = odds_dict.get(event['home_team'])
+                                    a_odd = odds_dict.get(event['away_team'])
+                                    d_odd = odds_dict.get('Draw')
+                                    if h_odd and a_odd and d_odd:
+                                        print(f"[API] Successfully fetched live odds: Home {h_odd}, Draw {d_odd}, Away {a_odd}")
+                                        return [float(h_odd), float(d_odd), float(a_odd)]
+        except Exception as e:
+            print(f"Live Odds API Error: {e}")
+
+    # 2. Fallback to Database Historical Odds
     db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
     db_a_name = TEAM_NAME_MAPPING.get(away_name, away_name)
     try:
@@ -100,7 +132,7 @@ def get_match_odds(home_name: str, away_name: str, elo_home: float, elo_away: fl
     except Exception:
         pass
     
-    # Fallback: calculate implied odds from Elo with standard home advantage
+    # 3. Fallback: calculate implied odds from Elo with standard home advantage
     dr = (elo_home + 50) - elo_away
     p_home = 1 / (1 + 10 ** (-dr / 400))
     p_draw = 0.24 # Typical EPL draw probability

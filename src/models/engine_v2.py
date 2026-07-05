@@ -21,57 +21,72 @@ engine_sqlalchemy = create_engine(DB_URI)
 class FPredictEngineV2:
     def __init__(self):
         self.base_engine = FPredictEngine()
-        self.knowledge_extractor = KnowledgeExtractor()
+        # Removed KnowledgeExtractor instantiation from here to decouple NLP
         self.conn = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host=localhost")
-        self.imputer = SimpleImputer(strategy='mean')
-        self._fit_imputer()
+        self.imputer_path = "src/models/imputer.joblib"
+        self.imputer = None
+        self._load_or_fit_imputer()
 
-    def _fit_imputer(self):
-        """Fit the imputer on historical data to ensure mean calculation is valid."""
-        query = """
-            SELECT 
-                (h.features->>'elo_rating')::float as h_elo,
-                (h.features->>'squad_power')::float as h_squad_power,
-                (h.features->>'sdi')::float as h_sdi,
-                (h.features->>'form_ppg')::float as h_form_ppg,
-                (h.features->>'form_gd')::float as h_form_gd,
-                (h.features->>'sentiment_score')::float as h_sentiment,
-                (a.features->>'elo_rating')::float as a_elo,
-                (a.features->>'squad_power')::float as a_squad_power,
-                (a.features->>'sdi')::float as a_sdi,
-                (a.features->>'form_ppg')::float as a_form_ppg,
-                (a.features->>'form_gd')::float as a_form_gd,
-                (a.features->>'sentiment_score')::float as a_sentiment,
-                m.odds_home::float, m.odds_draw::float, m.odds_away::float,
-                EXTRACT(MONTH FROM m.match_date)::float as match_month
-            FROM match_records m
-            JOIN feature_store h ON m.home_team_id = h.team_id AND m.match_date = h.snapshot_date
-            JOIN feature_store a ON m.away_team_id = a.team_id AND m.match_date = a.snapshot_date
-            LIMIT 500
-        """
-        df = pd.read_sql(query, engine_sqlalchemy)
-        if not df.empty:
-            df = df.fillna(0.0)
-            self.imputer.fit(df)
-            print("[ENGINE] Imputer fitted on historical feature columns.")
+    def _load_or_fit_imputer(self):
+        """Loads the imputer from disk if it exists, otherwise fits and saves it."""
+        import joblib
+        if os.path.exists(self.imputer_path):
+            self.imputer = joblib.load(self.imputer_path)
         else:
-            self.imputer = SimpleImputer(strategy='constant', fill_value=0.0)
+            self.imputer = SimpleImputer(strategy='mean')
+            query = """
+                SELECT 
+                    (h.features->>'elo_rating')::float as h_elo,
+                    (h.features->>'squad_power')::float as h_squad_power,
+                    (h.features->>'sdi')::float as h_sdi,
+                    (h.features->>'form_ppg')::float as h_form_ppg,
+                    (h.features->>'form_gd')::float as h_form_gd,
+                    (h.features->>'sentiment_score')::float as h_sentiment,
+                    (a.features->>'elo_rating')::float as a_elo,
+                    (a.features->>'squad_power')::float as a_squad_power,
+                    (a.features->>'sdi')::float as a_sdi,
+                    (a.features->>'form_ppg')::float as a_form_ppg,
+                    (a.features->>'form_gd')::float as a_form_gd,
+                    (a.features->>'sentiment_score')::float as a_sentiment,
+                    m.odds_home::float, m.odds_draw::float, m.odds_away::float,
+                    EXTRACT(MONTH FROM m.match_date)::float as match_month
+                FROM match_records m
+                JOIN feature_store h ON m.home_team_id = h.team_id AND m.match_date = h.snapshot_date
+                JOIN feature_store a ON m.away_team_id = a.team_id AND m.match_date = a.snapshot_date
+                LIMIT 500
+            """
+            df = pd.read_sql(query, engine_sqlalchemy)
+            if not df.empty:
+                df = df.fillna(0.0)
+                self.imputer.fit(df)
+                joblib.dump(self.imputer, self.imputer_path)
+            else:
+                self.imputer = SimpleImputer(strategy='constant', fill_value=0.0)
 
     def get_contextual_knowledge(self, h_name, a_name):
+        # Decoupled NLP: Now we just fetch the precomputed sentiment scores from the Feature Store
+        # instead of running an LLM on raw text during inference.
         knowledge_summary = {"h_factors": 0.0, "a_factors": 0.0}
         with self.conn.cursor() as cur:
-            cur.execute("SELECT raw_text FROM unstructured_news WHERE processed = FALSE LIMIT 5")
-            news = cur.fetchall()
-            for (text,) in news:
-                intel = self.knowledge_extractor.extract_knowledge(text)
-                if intel and 'entity' in intel:
-                    entity = str(intel['entity']).lower()
-                    if h_name.lower() in entity:
-                        print(f"[ENGINE] Applied Knowledge to Home Team ({h_name}): {intel.get('impact_score', 0)}")
-                        knowledge_summary['h_factors'] += float(intel.get('impact_score', 0))
-                    elif a_name.lower() in entity:
-                        print(f"[ENGINE] Applied Knowledge to Away Team ({a_name}): {intel.get('impact_score', 0)}")
-                        knowledge_summary['a_factors'] += float(intel.get('impact_score', 0))
+            # Query the pre-computed sentiment from feature_store rather than unstructured_news
+            cur.execute("""
+                SELECT (features->>'sentiment_score')::float 
+                FROM feature_store f 
+                JOIN teams t ON f.team_id = t.id 
+                WHERE t.team_name = %s ORDER BY snapshot_date DESC LIMIT 1
+            """, (h_name,))
+            res_h = cur.fetchone()
+            if res_h: knowledge_summary["h_factors"] = res_h[0]
+
+            cur.execute("""
+                SELECT (features->>'sentiment_score')::float 
+                FROM feature_store f 
+                JOIN teams t ON f.team_id = t.id 
+                WHERE t.team_name = %s ORDER BY snapshot_date DESC LIMIT 1
+            """, (a_name,))
+            res_a = cur.fetchone()
+            if res_a: knowledge_summary["a_factors"] = res_a[0]
+            
         return knowledge_summary
 
     def fetch_features(self, match_id):

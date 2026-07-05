@@ -114,9 +114,9 @@ class FPredictEngine:
         self.ensemble = FPredictEnsemble()
         self.bankroll = 1000.0 # Example starting bankroll
 
-    def calculate_kelly(self, prob, odds):
+    def calculate_kelly(self, prob, odds, fraction=0.1):
         """
-        Kelly Criterion: f* = (bp - q) / b
+        Fractional Kelly Criterion: f* = fraction * ((bp - q) / b)
         b: decimal odds - 1
         p: probability of winning
         q: probability of losing (1-p)
@@ -125,7 +125,10 @@ class FPredictEngine:
         p = prob
         q = 1 - p
         f_star = (b * p - q) / b
-        return max(0, f_star) # Never risk negative bankroll
+        
+        # Scale to Fractional Kelly for bankroll safety
+        fractional_f_star = f_star * fraction
+        return max(0, fractional_f_star)
 
     def trade_recommendation(self, h_name, a_name, odds_h, odds_d, odds_a, features_a, features_b):
         probs = self.ensemble.predict(features_a, features_b)
