@@ -43,12 +43,12 @@ The project's maintenance and development are structured around the football cal
 ## ▶️ Running the Project
 
 1. **Environment Setup:** Ensure all your credentials and API keys are stored in a `.env` file at the root of the project.
-2. **Web Application:**
-   To run the frontend/web app, navigate to the `fpredict_app` directory, install dependencies using `yarn`, and start the development server:
+2. **Mobile Application (Flutter):**
+   To run the frontend app, navigate to the `fpredict_app` directory, get the Flutter dependencies, and run the app:
    ```bash
    cd fpredict_app
-   yarn install
-   yarn run dev
+   flutter pub get
+   flutter run
    ```
 3. **Supabase Functions:**
    To deploy the Supabase Edge Functions:
