@@ -9,8 +9,10 @@
     "dev": "vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run"
+    "preview": "yarn run build && wrangler dev",
+    "test": "vitest run",
+    "deploy": "yarn run build && wrangler deploy",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -26,6 +28,7 @@
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.43.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-cli": "^1.132.0",
@@ -38,7 +41,8 @@
     "jsdom": "^28.1.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "wrangler": "^4.107.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

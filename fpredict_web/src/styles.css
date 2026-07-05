@@ -259,3 +259,124 @@ body {
   border-radius: 4px;
   transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.sidebar {
+  width: 260px;
+  background: rgba(10, 12, 16, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--glass-border);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+}
+
+.sidebar-header {
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--glass-border);
+  height: 80px;
+}
+
+.sidebar-logo {
+  font-weight: 700;
+  font-size: 1.2rem;
+  background: -webkit-linear-gradient(45deg, var(--accent-cyan), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar.collapsed .sidebar-logo {
+  opacity: 0;
+  display: none;
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+.sidebar-toggle:hover {
+  color: var(--accent-cyan);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 0;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  border-right: 3px solid transparent;
+}
+
+.nav-item:hover {
+  background: rgba(0, 240, 255, 0.05);
+  color: #fff;
+}
+
+.nav-item.active {
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--accent-cyan);
+  border-right: 3px solid var(--accent-cyan);
+}
+
+.nav-icon {
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 1.2rem;
+}
+
+.nav-label {
+  white-space: nowrap;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar.collapsed .nav-label {
+  opacity: 0;
+  display: none;
+}
+
+.main-content {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2rem;
+  position: relative;
+}
