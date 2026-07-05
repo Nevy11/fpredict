@@ -2,6 +2,21 @@ import { HeadContent, Scripts, createRootRoute, Outlet, Link } from '@tanstack/r
 import { useState } from 'react'
 import appCss from '../styles.css?url'
 
+function NotFound() {
+  return (
+    <div className="container page-stack">
+      <div className="empty-state">
+        <div className="empty-icon">404</div>
+        <h1 className="heading-secondary">Page not found</h1>
+        <p className="card-caption">This route does not exist or is still loading after a hot reload.</p>
+        <Link to="/" className="btn-primary not-found-link">
+          Back to Match Predictor
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -15,6 +30,7 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootDocument,
+  notFoundComponent: NotFound,
 })
 
 function Sidebar() {
@@ -44,6 +60,18 @@ function Sidebar() {
             </svg>
           </div>
           <span className="nav-label">Match Predictor</span>
+        </Link>
+
+        <Link to="/managers" className="nav-item" activeProps={{ className: 'active' }}>
+          <div className="nav-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <span className="nav-label">Managers</span>
         </Link>
 
         <Link to="/backtest" className="nav-item" activeProps={{ className: 'active' }}>

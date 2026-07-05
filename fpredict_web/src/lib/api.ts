@@ -67,6 +67,76 @@ export type BacktestResult = {
   }>
 }
 
+export type TacticalStyle = 'possession' | 'pressing' | 'counter' | 'pragmatic' | 'balanced'
+
+export type ManagerForm = {
+  ppg: number
+  win_rate: number
+  matches: number
+}
+
+export type ManagerTenure = {
+  team: string
+  start_date: string
+  end_date: string | null
+  is_current: boolean
+}
+
+export type ManagerSide = {
+  name: string
+  team: string
+  nationality: string
+  tactical_style: TacticalStyle
+  formation: string
+  inferred: boolean
+  history: ManagerTenure[]
+  form: ManagerForm
+}
+
+export type ManagerHeadToHead = {
+  meetings: number
+  home_manager_wins: number
+  away_manager_wins: number
+  draws: number
+}
+
+export type ManagerLookupResult = {
+  home: ManagerSide
+  away: ManagerSide
+  head_to_head: ManagerHeadToHead
+  fallback_mode?: boolean
+}
+
+export type ProbabilityBundle = {
+  home: number
+  draw: number
+  away: number
+}
+
+export type ManagerFactor = {
+  weight: number
+  features: Record<string, number>
+  head_to_head: ManagerHeadToHead
+}
+
+export type ManagerPredictionResult = {
+  home: number
+  draw: number
+  away: number
+  base_probs: ProbabilityBundle
+  manager_probs: ProbabilityBundle
+  manager_factor: ManagerFactor
+  managers: {
+    home: ManagerSide
+    away: ManagerSide
+  }
+  odds: [number, number, number]
+  value_bets: Array<{ pick: string; kelly: number }>
+  home_features: TeamFeatures
+  away_features: TeamFeatures
+  historical_matches: PredictionResult['historical_matches']
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init)
   if (!response.ok) {
@@ -101,5 +171,39 @@ export function runBacktest(params: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
+  })
+}
+
+export function fetchManagerNames() {
+  return request<{ managers: string[] }>('/managers').then((payload) => payload.managers)
+}
+
+export function fetchManagerLookup(homeTeam: string, awayTeam: string) {
+  const params = new URLSearchParams({ home_team: homeTeam, away_team: awayTeam })
+  return request<ManagerLookupResult>(`/managers/lookup?${params.toString()}`)
+}
+
+export function fetchManagerProfile(managerName: string, team?: string) {
+  const query = team ? `?team=${encodeURIComponent(team)}` : ''
+  return request<ManagerSide>(
+    `/managers/${encodeURIComponent(managerName)}/profile${query}`,
+  )
+}
+
+export function fetchManagerPrediction(params: {
+  homeTeam: string
+  awayTeam: string
+  homeManager?: string | null
+  awayManager?: string | null
+}) {
+  return request<ManagerPredictionResult>('/predict/manager', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      home_team: params.homeTeam,
+      away_team: params.awayTeam,
+      home_manager: params.homeManager ?? null,
+      away_manager: params.awayManager ?? null,
+    }),
   })
 }

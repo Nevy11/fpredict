@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ManagersRouteImport } from './routes/managers'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as BacktestRouteImport } from './routes/backtest'
 import { Route as AboutRouteImport } from './routes/about'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManagersRoute = ManagersRouteImport.update({
+  id: '/managers',
+  path: '/managers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeaturesRoute = FeaturesRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
   '/features': typeof FeaturesRoute
+  '/managers': typeof ManagersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
   '/features': typeof FeaturesRoute
+  '/managers': typeof ManagersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,23 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
   '/features': typeof FeaturesRoute
+  '/managers': typeof ManagersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/backtest' | '/features' | '/settings'
+  fullPaths:
+    '/' | '/about' | '/backtest' | '/features' | '/managers' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/backtest' | '/features' | '/settings'
-  id: '__root__' | '/' | '/about' | '/backtest' | '/features' | '/settings'
+  to: '/' | '/about' | '/backtest' | '/features' | '/managers' | '/settings'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/backtest'
+    | '/features'
+    | '/managers'
+    | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +93,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   BacktestRoute: typeof BacktestRoute
   FeaturesRoute: typeof FeaturesRoute
+  ManagersRoute: typeof ManagersRoute
   SettingsRoute: typeof SettingsRoute
 }
 
@@ -86,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/managers': {
+      id: '/managers'
+      path: '/managers'
+      fullPath: '/managers'
+      preLoaderRoute: typeof ManagersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/features': {
@@ -124,6 +149,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   BacktestRoute: BacktestRoute,
   FeaturesRoute: FeaturesRoute,
+  ManagersRoute: ManagersRoute,
   SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport

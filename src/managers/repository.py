@@ -4,8 +4,9 @@ from typing import Any
 
 import psycopg2
 from dotenv import load_dotenv
+from psycopg2 import errors as pg_errors
 
-from src.managers.seed_data import CURRENT_MANAGERS_2025, MANAGER_PROFILES, TACTICAL_STYLES
+from src.managers.seed_data import CURRENT_MANAGERS_2025, MANAGER_PROFILES, TENURE_SEED, TACTICAL_STYLES
 
 load_dotenv()
 
@@ -22,44 +23,73 @@ class ManagerRepository:
         self._team_ids: dict[str, str] = {}
         self._tenures: list[dict[str, Any]] = []
         self._loaded = False
+        self._using_seed_fallback = False
 
     def close(self):
         self.conn.close()
+
+    def list_manager_names(self) -> list[str]:
+        names = sorted(name for name in MANAGER_PROFILES if name != "League Average")
+        if self._tenures:
+            names = sorted(set(names) | {tenure["manager_name"] for tenure in self._tenures})
+        return names
 
     def _load_cache(self):
         if self._loaded:
             return
 
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT id, team_name FROM teams")
-            for team_id, team_name in cur.fetchall():
-                self._team_ids[team_name] = str(team_id)
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT id, team_name FROM teams")
+                for team_id, team_name in cur.fetchall():
+                    self._team_ids[team_name] = str(team_id)
 
-            cur.execute(
-                """
-                SELECT m.name, m.nationality, m.tactical_style, m.preferred_formation,
-                       t.team_name, mt.start_date, mt.end_date, mt.is_current
-                FROM manager_tenures mt
-                JOIN managers m ON mt.manager_id = m.id
-                JOIN teams t ON mt.team_id = t.id
-                ORDER BY mt.start_date ASC
-                """
-            )
-            for row in cur.fetchall():
-                self._tenures.append(
-                    {
-                        "manager_name": row[0],
-                        "nationality": row[1],
-                        "tactical_style": row[2] or "balanced",
-                        "formation": row[3] or "4-3-3",
-                        "team_name": row[4],
-                        "start_date": row[5],
-                        "end_date": row[6],
-                        "is_current": row[7],
-                    }
+                cur.execute(
+                    """
+                    SELECT m.name, m.nationality, m.tactical_style, m.preferred_formation,
+                           t.team_name, mt.start_date, mt.end_date, mt.is_current
+                    FROM manager_tenures mt
+                    JOIN managers m ON mt.manager_id = m.id
+                    JOIN teams t ON mt.team_id = t.id
+                    ORDER BY mt.start_date ASC
+                    """
                 )
+                for row in cur.fetchall():
+                    self._tenures.append(
+                        {
+                            "manager_name": row[0],
+                            "nationality": row[1],
+                            "tactical_style": row[2] or "balanced",
+                            "formation": row[3] or "4-3-3",
+                            "team_name": row[4],
+                            "start_date": row[5],
+                            "end_date": row[6],
+                            "is_current": row[7],
+                        }
+                    )
+        except (pg_errors.UndefinedTable, pg_errors.OperationalError) as error:
+            print(f"Manager repository falling back to seed data: {error}")
+            self._using_seed_fallback = True
+            self._load_seed_tenures()
 
         self._loaded = True
+
+    def _load_seed_tenures(self):
+        self._tenures.clear()
+        for team_name, manager_name, start_date, end_date in TENURE_SEED:
+            profile = MANAGER_PROFILES.get(manager_name, MANAGER_PROFILES["League Average"])
+            self._tenures.append(
+                {
+                    "manager_name": manager_name,
+                    "nationality": profile["nationality"],
+                    "tactical_style": profile["tactical_style"],
+                    "formation": profile["formation"],
+                    "team_name": team_name,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "is_current": end_date is None,
+                }
+            )
 
     def resolve_manager(self, team_name: str, match_date: date | str | None = None) -> dict[str, Any]:
         self._load_cache()
@@ -83,11 +113,15 @@ class ManagerRepository:
             if tenure["team_name"] == team_name and tenure["is_current"]:
                 return self._profile_from_tenure(tenure)
 
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT manager_name FROM teams WHERE team_name = %s", (team_name,))
-            row = cur.fetchone()
-            if row and row[0]:
-                return self._profile_from_name(row[0], team_name, inferred=False)
+        if not self._using_seed_fallback:
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT manager_name FROM teams WHERE team_name = %s", (team_name,))
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        return self._profile_from_name(row[0], team_name, inferred=False)
+            except (pg_errors.UndefinedTable, pg_errors.OperationalError):
+                pass
 
         fallback_name = CURRENT_MANAGERS_2025.get(team_name, "League Average")
         return self._profile_from_name(fallback_name, team_name, inferred=True)
@@ -95,6 +129,7 @@ class ManagerRepository:
     def lookup_match_managers(self, home_team: str, away_team: str) -> dict[str, Any]:
         home_manager = self.get_current_manager(home_team)
         away_manager = self.get_current_manager(away_team)
+        h2h = self.compute_head_to_head(home_manager["name"], away_manager["name"], date.today())
         return {
             "home": {
                 **home_manager,
@@ -106,6 +141,8 @@ class ManagerRepository:
                 "history": self.get_manager_history(away_manager["name"]),
                 "form": self.compute_manager_form(away_manager["name"], away_team, date.today()),
             },
+            "head_to_head": h2h,
+            "fallback_mode": self._using_seed_fallback,
         }
 
     def get_profile(self, manager_name: str) -> dict[str, Any]:
@@ -121,11 +158,12 @@ class ManagerRepository:
         for tenure in self._tenures:
             if tenure["manager_name"] != manager_name:
                 continue
+            end_value = tenure["end_date"]
             history.append(
                 {
                     "team": tenure["team_name"],
                     "start_date": self._as_date(tenure["start_date"]).isoformat(),
-                    "end_date": tenure["end_date"].isoformat() if tenure["end_date"] else None,
+                    "end_date": self._as_date(end_value).isoformat() if end_value else None,
                     "is_current": tenure["is_current"],
                 }
             )
@@ -133,22 +171,7 @@ class ManagerRepository:
 
     def compute_manager_form(self, manager_name: str, team_name: str, before_date: date | str) -> dict[str, float]:
         before = self._as_date(before_date)
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT m.home_goals, m.away_goals, th.team_name, ta.team_name, m.match_date
-                FROM match_records m
-                JOIN teams th ON m.home_team_id = th.id
-                JOIN teams ta ON m.away_team_id = ta.id
-                WHERE m.match_date < %s
-                  AND m.home_goals IS NOT NULL
-                  AND m.away_goals IS NOT NULL
-                ORDER BY m.match_date DESC
-                LIMIT 400
-                """,
-                (before,),
-            )
-            rows = cur.fetchall()
+        rows = self._fetch_recent_matches(before)
 
         points = 0
         wins = 0
@@ -193,24 +216,7 @@ class ManagerRepository:
         away_wins = 0
         draws = 0
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT m.home_goals, m.away_goals, th.team_name, ta.team_name, m.match_date
-                FROM match_records m
-                JOIN teams th ON m.home_team_id = th.id
-                JOIN teams ta ON m.away_team_id = ta.id
-                WHERE m.match_date < %s
-                  AND m.home_goals IS NOT NULL
-                  AND m.away_goals IS NOT NULL
-                ORDER BY m.match_date DESC
-                LIMIT 800
-                """,
-                (before,),
-            )
-            rows = cur.fetchall()
-
-        for home_goals, away_goals, home_team, away_team, match_day in rows:
+        for home_goals, away_goals, home_team, away_team, match_day in self._fetch_recent_matches(before, limit=800):
             home_mgr = self.resolve_manager(home_team, match_day)["name"]
             away_mgr = self.resolve_manager(away_team, match_day)["name"]
             if home_mgr != home_manager or away_mgr != away_manager:
@@ -264,6 +270,27 @@ class ManagerRepository:
             "mgr_h2h_home_wins": h2h["home_manager_wins"],
             "mgr_h2h_away_wins": h2h["away_manager_wins"],
         }
+
+    def _fetch_recent_matches(self, before: date, limit: int = 400) -> list[tuple[Any, ...]]:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT m.home_goals, m.away_goals, th.team_name, ta.team_name, m.match_date
+                    FROM match_records m
+                    JOIN teams th ON m.home_team_id = th.id
+                    JOIN teams ta ON m.away_team_id = ta.id
+                    WHERE m.match_date < %s
+                      AND m.home_goals IS NOT NULL
+                      AND m.away_goals IS NOT NULL
+                    ORDER BY m.match_date DESC
+                    LIMIT %s
+                    """,
+                    (before, limit),
+                )
+                return cur.fetchall()
+        except (pg_errors.UndefinedTable, pg_errors.OperationalError):
+            return []
 
     def _profile_from_tenure(self, tenure: dict[str, Any]) -> dict[str, Any]:
         return {

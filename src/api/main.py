@@ -2,6 +2,7 @@ import os
 import psycopg2
 import asyncio
 import random
+from datetime import date
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -230,6 +231,11 @@ def run_backtest(request: BacktestRequest):
         print(f"Backtest Error: {e}")
         raise HTTPException(status_code=500, detail="Backtest simulation failed")
 
+@app.get("/managers")
+def list_managers():
+    repo = get_manager_repo()
+    return {"managers": repo.list_manager_names()}
+
 @app.get("/managers/lookup")
 def lookup_managers(home_team: str, away_team: str):
     db_home = resolve_db_team_name(home_team)
@@ -242,9 +248,14 @@ def lookup_managers(home_team: str, away_team: str):
         raise HTTPException(status_code=500, detail="Unable to resolve current managers")
 
 @app.get("/managers/{manager_name}/profile")
-def get_manager_profile(manager_name: str):
+def get_manager_profile(manager_name: str, team: str | None = None):
     repo = get_manager_repo()
-    return repo.get_profile(manager_name)
+    profile = repo.get_profile(manager_name)
+    if team:
+        db_team = resolve_db_team_name(team)
+        profile["form"] = repo.compute_manager_form(manager_name, db_team, date.today())
+        profile["team"] = db_team
+    return profile
 
 @app.post("/predict/manager")
 def predict_with_manager(request: ManagerPredictionRequest):
