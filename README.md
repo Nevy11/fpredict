@@ -48,13 +48,23 @@ The project's maintenance and development are structured around the football cal
 
 ## ▶️ Running the Project
 
-1. **Environment Setup:** Ensure all your credentials and API keys are stored in a `.env` file at the root of the project.
+1. **Environment Setup & Database:**
+   - Ensure you have PostgreSQL running locally with the `fpredict_db` database initialized and the `teams` and `feature_store` tables populated.
+   - Create a `.env` file at the root of the project with your credentials:
+     ```env
+     DB_USER=your_db_username
+     DB_PASSWORD=your_db_password
+     ODDS_API_KEY=your_odds_api_key # Optional, but recommended for live odds ingestion
+     ```
 
 2. **Backend API (FastAPI):**
-   To serve predictions to the frontend applications, run the FastAPI server:
+   To serve predictions to the frontend applications, first ensure all backend dependencies are installed:
    ```bash
-   pip install fastapi uvicorn pydantic
-   python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+   pip install fastapi uvicorn pydantic httpx pandas psycopg2-binary xgboost torch scikit-learn python-dotenv
+   ```
+   Start the FastAPI development server:
+   ```bash
+   uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
 3. **Web Application (React/Vite):**

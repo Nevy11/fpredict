@@ -90,8 +90,9 @@ def get_match_odds(home_name: str, away_name: str, elo_home: float, elo_away: fl
             if response.status_code == 200:
                 events = response.json()
                 for event in events:
-                    # Very simple string matching to find the right event
-                    if home_name[:5].lower() in event['home_team'].lower() or away_name[:5].lower() in event['away_team'].lower():
+                    home_match = (home_name.split()[-1].lower() in event['home_team'].lower())
+                    away_match = (away_name.split()[-1].lower() in event['away_team'].lower())
+                    if home_match and away_match:
                         # Find Pinnacle or the first available bookmaker
                         bookmakers = event.get('bookmakers', [])
                         if bookmakers:
