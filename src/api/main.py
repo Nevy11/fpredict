@@ -1,47 +1,73 @@
+import os
+import psycopg2
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+from dotenv import load_dotenv
 
 from src.models.ensemble import FPredictEngine
 
+load_dotenv()
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = "fpredict_db"
+
 app = FastAPI(title="FPredict API")
 
-# Setup CORS to allow requests from the web frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load engine globally so it's not reloaded on every request
 engine = FPredictEngine()
 
-# 2026/2027 EPL Season Teams with hypothetical baseline features
-EPL_TEAMS_26_27 = {
-    "Arsenal": {'elo': 1715, 'power': 85.0, 'sdi': 0.95, 'form': 2.4, 'sent': 0.05},
-    "Aston Villa": {'elo': 1650, 'power': 78.0, 'sdi': 0.90, 'form': 1.8, 'sent': 0.02},
-    "Bournemouth": {'elo': 1590, 'power': 72.0, 'sdi': 0.85, 'form': 1.4, 'sent': 0.00},
-    "Brentford": {'elo': 1595, 'power': 73.0, 'sdi': 0.88, 'form': 1.3, 'sent': -0.01},
-    "Brighton & Hove Albion": {'elo': 1610, 'power': 74.0, 'sdi': 0.92, 'form': 1.5, 'sent': 0.01},
-    "Chelsea": {'elo': 1670, 'power': 81.0, 'sdi': 0.85, 'form': 1.9, 'sent': -0.02},
-    "Coventry City": {'elo': 1520, 'power': 65.0, 'sdi': 1.05, 'form': 2.0, 'sent': 0.08},
-    "Crystal Palace": {'elo': 1600, 'power': 72.0, 'sdi': 0.90, 'form': 1.4, 'sent': 0.00},
-    "Everton": {'elo': 1580, 'power': 71.0, 'sdi': 0.85, 'form': 1.2, 'sent': -0.03},
-    "Fulham": {'elo': 1585, 'power': 72.0, 'sdi': 0.88, 'form': 1.3, 'sent': 0.00},
-    "Hull City": {'elo': 1515, 'power': 64.0, 'sdi': 1.02, 'form': 1.9, 'sent': 0.07},
-    "Ipswich Town": {'elo': 1530, 'power': 66.0, 'sdi': 1.00, 'form': 1.8, 'sent': 0.05},
-    "Leeds United": {'elo': 1560, 'power': 70.0, 'sdi': 0.95, 'form': 1.6, 'sent': 0.03},
-    "Liverpool": {'elo': 1705, 'power': 84.0, 'sdi': 0.90, 'form': 2.2, 'sent': 0.04},
-    "Manchester City": {'elo': 1730, 'power': 86.0, 'sdi': 0.88, 'form': 2.5, 'sent': -0.01},
-    "Manchester United": {'elo': 1660, 'power': 80.0, 'sdi': 0.82, 'form': 1.7, 'sent': -0.04},
-    "Newcastle United": {'elo': 1680, 'power': 82.0, 'sdi': 0.92, 'form': 2.0, 'sent': 0.02},
-    "Nottingham Forest": {'elo': 1575, 'power': 70.0, 'sdi': 0.86, 'form': 1.2, 'sent': -0.02},
-    "Sunderland": {'elo': 1540, 'power': 68.0, 'sdi': 0.98, 'form': 1.7, 'sent': 0.06},
-    "Tottenham Hotspur": {'elo': 1675, 'power': 81.0, 'sdi': 0.89, 'form': 1.9, 'sent': 0.01}
+TEAM_NAME_MAPPING = {
+    "Brighton & Hove Albion": "Brighton",
+    "Manchester City": "Man City",
+    "Manchester United": "Man United",
+    "Nottingham Forest": "Nott'm Forest",
+    "Tottenham Hotspur": "Tottenham",
+    "Leicester City": "Leicester",
+    "Leeds United": "Leeds",
+    "Coventry City": "Coventry"
 }
+
+# Fallback hypothetical baseline
+FALLBACK_FEATURES = {
+    'elo': 1500, 'power': 70.0, 'sdi': 1.0, 'form': 1.0, 'sent': 0.0, 'gd': 0.0
+}
+
+def get_team_features(team_name: str):
+    db_name = TEAM_NAME_MAPPING.get(team_name, team_name)
+    try:
+        conn = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host=localhost")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT f.features 
+                FROM teams t 
+                JOIN feature_store f ON t.id = f.team_id 
+                WHERE t.team_name = %s 
+                ORDER BY f.snapshot_date DESC 
+                LIMIT 1
+            """, (db_name,))
+            res = cur.fetchone()
+            if res and res[0]:
+                features = res[0]
+                return {
+                    'elo': float(features.get('elo_rating', 1500)),
+                    'power': float(features.get('squad_power', 70.0)),
+                    'sdi': float(features.get('sdi', 1.0)),
+                    'form': float(features.get('form_ppg', 1.0)),
+                    'sent': float(features.get('sentiment_score', 0.0)),
+                    'gd': float(features.get('form_gd', 0.0))
+                }
+    except Exception as e:
+        print(f"DB Error: {e}")
+    return dict(FALLBACK_FEATURES)
 
 class PredictionRequest(BaseModel):
     home_team: str
@@ -54,30 +80,27 @@ class PredictionResponse(BaseModel):
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest):
-    if request.home_team not in EPL_TEAMS_26_27 or request.away_team not in EPL_TEAMS_26_27:
-        raise HTTPException(status_code=400, detail="Team not found")
-        
-    h_features = EPL_TEAMS_26_27[request.home_team]
-    a_features = EPL_TEAMS_26_27[request.away_team]
+    h_features = get_team_features(request.home_team)
+    a_features = get_team_features(request.away_team)
     
-    # Simple mocked odds for now
+    # In a fully live environment, odds would be fetched dynamically. Using baselines for now.
     odds = [2.00, 3.20, 3.50]
     
     features_a_dict = {
-        'h_elo': h_features['elo'], 'h_squad_power': h_features['power'], 'h_sdi': h_features['sdi'], 'h_form_ppg': h_features['form'], 'h_form_gd': 0.5, 'h_sentiment': h_features['sent'],
-        'a_elo': a_features['elo'], 'a_squad_power': a_features['power'], 'a_sdi': a_features['sdi'], 'a_form_ppg': a_features['form'], 'a_form_gd': 0.2, 'a_sentiment': a_features['sent'],
+        'h_elo': h_features['elo'], 'h_squad_power': h_features['power'], 'h_sdi': h_features['sdi'], 'h_form_ppg': h_features['form'], 'h_form_gd': h_features['gd'], 'h_sentiment': h_features['sent'],
+        'a_elo': a_features['elo'], 'a_squad_power': a_features['power'], 'a_sdi': a_features['sdi'], 'a_form_ppg': a_features['form'], 'a_form_gd': a_features['gd'], 'a_sentiment': a_features['sent'],
         'odds_home': odds[0], 'odds_draw': odds[1], 'odds_away': odds[2],
         'elo_diff': h_features['elo'] - a_features['elo'],
         'form_diff': h_features['form'] - a_features['form'],
-        'gd_diff': 0.5 - 0.2,
+        'gd_diff': h_features['gd'] - a_features['gd'],
         'sentiment_diff': h_features['sent'] - a_features['sent'],
         'match_month': 9.0
     }
     features_a_df = pd.DataFrame([features_a_dict])
 
     features_b = [[
-        h_features['elo'], h_features['power'], h_features['sdi'], h_features['form'], 0.5, h_features['sent'],
-        a_features['elo'], a_features['power'], a_features['sdi'], a_features['form'], 0.2, a_features['sent'],
+        h_features['elo'], h_features['power'], h_features['sdi'], h_features['form'], h_features['gd'], h_features['sent'],
+        a_features['elo'], a_features['power'], a_features['sdi'], a_features['form'], a_features['gd'], a_features['sent'],
         odds[0], odds[1], odds[2], 9.0
     ]]
 
