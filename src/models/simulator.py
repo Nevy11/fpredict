@@ -17,10 +17,18 @@ class FPredictSimulator:
         self.history = []
         self.conn = psycopg2.connect(LOCAL_DB_URL)
 
-    def run_backtest(self, season_year="2023"):
-        print(f"Starting Dry Run Simulation for Season {season_year}...")
-        
-        # Load match data with features matched to the EXACT date
+    SEASON_WINDOWS = {
+        "2023/24": ("2023-08-01", "2024-05-31"),
+        "2024/25": ("2024-08-01", "2025-05-31"),
+    }
+
+    def run_backtest(self, season="2023/24", kelly_fraction=0.1, initial_bankroll=None):
+        if initial_bankroll is not None:
+            self.bankroll = initial_bankroll
+
+        start_date, end_date = self.SEASON_WINDOWS.get(season, self.SEASON_WINDOWS["2023/24"])
+        print(f"Starting Dry Run Simulation for Season {season}...")
+
         query = """
             SELECT 
                 m.id, m.match_date, h.team_name as h_name, a.team_name as a_name,
@@ -43,11 +51,14 @@ class FPredictSimulator:
             JOIN teams a ON m.away_team_id = a.id
             JOIN feature_store hf ON m.home_team_id = hf.team_id AND m.match_date = hf.snapshot_date
             JOIN feature_store af ON m.away_team_id = af.team_id AND m.match_date = af.snapshot_date
-            WHERE m.match_date >= '2023-08-01' AND m.match_date <= '2024-05-31'
+            WHERE m.match_date >= %s AND m.match_date <= %s
+              AND m.odds_home IS NOT NULL
             ORDER BY m.match_date ASC
         """
-        df = pd.read_sql(query, self.conn)
+        df = pd.read_sql(query, self.conn, params=(start_date, end_date))
         print(f"Simulating {len(df)} matches...")
+        starting_bankroll = self.bankroll
+        self.history = []
 
         for _, row in df.iterrows():
             # 1. Prepare Base Features for Tower A
@@ -93,29 +104,57 @@ class FPredictSimulator:
             )
 
             for trade in trades:
-                bet_amount = self.bankroll * trade['kelly'] * 0.1 # Fractional Kelly (10% scale for safety)
-                
-                # Check result
+                bet_amount = self.bankroll * trade['kelly'] * kelly_fraction
+
                 won = False
-                if trade['pick'] == row['h_name'] and row['home_goals'] > row['away_goals']: won = True
-                if trade['pick'] == row['a_name'] and row['away_goals'] > row['home_goals']: won = True
-                
+                if trade['pick'] == row['h_name'] and row['home_goals'] > row['away_goals']:
+                    won = True
+                if trade['pick'] == row['a_name'] and row['away_goals'] > row['home_goals']:
+                    won = True
+
                 if won:
                     odds = row['odds_home'] if trade['pick'] == row['h_name'] else row['odds_away']
                     profit = bet_amount * (odds - 1)
                     self.bankroll += profit
                 else:
                     self.bankroll -= bet_amount
-                
+
                 self.history.append({
-                    "date": row['match_date'],
+                    "date": row['match_date'].strftime("%Y-%m-%d") if hasattr(row['match_date'], 'strftime') else str(row['match_date']),
+                    "match": f"{row['h_name']} vs {row['a_name']}",
                     "pick": trade['pick'],
                     "won": won,
-                    "bankroll": self.bankroll
+                    "bankroll": round(self.bankroll, 2),
                 })
 
         print(f"Simulation Complete. Final Bankroll: ${self.bankroll:.2f}")
-        return self.bankroll
+        return self.build_report(season, starting_bankroll)
+
+    def build_report(self, season, starting_bankroll):
+        wins = sum(1 for bet in self.history if bet['won'])
+        total_bets = len(self.history)
+        equity_curve = []
+        seen_dates = set()
+        for bet in self.history:
+            if bet['date'] not in seen_dates:
+                equity_curve.append({"date": bet['date'], "bankroll": bet['bankroll']})
+                seen_dates.add(bet['date'])
+
+        if not equity_curve:
+            equity_curve.append({"date": "Start", "bankroll": round(starting_bankroll, 2)})
+
+        roi = ((self.bankroll - starting_bankroll) / starting_bankroll * 100) if starting_bankroll else 0.0
+        return {
+            "season": season,
+            "initial_bankroll": round(starting_bankroll, 2),
+            "final_bankroll": round(self.bankroll, 2),
+            "roi": round(roi, 2),
+            "total_bets": total_bets,
+            "wins": wins,
+            "win_rate": round((wins / total_bets * 100) if total_bets else 0.0, 2),
+            "equity_curve": equity_curve,
+            "recent_bets": self.history[-8:][::-1],
+        }
 
 if __name__ == "__main__":
     sim = FPredictSimulator()

@@ -9,6 +9,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from src.models.ensemble import FPredictEngine
+from src.models.simulator import FPredictSimulator
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
@@ -37,6 +38,15 @@ TEAM_NAME_MAPPING = {
     "Leeds United": "Leeds",
     "Coventry City": "Coventry"
 }
+
+DB_TO_DISPLAY = {db: display for display, db in TEAM_NAME_MAPPING.items()}
+
+FRONTEND_TEAMS = [
+    "Arsenal", "Aston Villa", "Bournemouth", "Brentford", "Brighton & Hove Albion",
+    "Chelsea", "Coventry City", "Crystal Palace", "Everton", "Fulham",
+    "Hull City", "Ipswich Town", "Leeds United", "Liverpool", "Manchester City",
+    "Manchester United", "Newcastle United", "Nottingham Forest", "Sunderland", "Tottenham Hotspur"
+]
 
 # Fallback hypothetical baseline
 FALLBACK_FEATURES = {
@@ -86,6 +96,117 @@ class PredictionResponse(BaseModel):
     home_features: Dict[str, Any]
     away_features: Dict[str, Any]
     historical_matches: List[Dict[str, Any]]
+
+class BacktestRequest(BaseModel):
+    season: str = "2023/24"
+    initial_bankroll: float = 1000.0
+    kelly_fraction: float = 0.5
+
+def resolve_db_team_name(team_name: str) -> str:
+    return TEAM_NAME_MAPPING.get(team_name, team_name)
+
+def resolve_display_team_name(db_name: str) -> str:
+    return DB_TO_DISPLAY.get(db_name, db_name)
+
+@app.get("/teams")
+def list_teams():
+    return FRONTEND_TEAMS
+
+@app.get("/features/{team_name}")
+def get_feature_series(team_name: str):
+    db_name = resolve_db_team_name(team_name)
+    snapshots = []
+    try:
+        conn = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host=localhost")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT snapshot_date,
+                       features->>'elo_rating',
+                       features->>'sdi',
+                       features->>'form_ppg',
+                       features->>'sentiment_score',
+                       features->>'squad_power'
+                FROM feature_store fs
+                JOIN teams t ON fs.team_id = t.id
+                WHERE t.team_name = %s
+                ORDER BY snapshot_date ASC
+            """, (db_name,))
+            rows = cur.fetchall()
+            for index, row in enumerate(rows, start=1):
+                snapshots.append({
+                    "date": row[0].strftime("%Y-%m-%d") if hasattr(row[0], 'strftime') else str(row[0]),
+                    "gameweek": f"GW{index}",
+                    "elo": round(float(row[1] or 1500), 1),
+                    "sdi": round(float(row[2] or 1.0), 2),
+                    "form": round(float(row[3] or 1.0), 2),
+                    "sentiment": round(float(row[4] or 0.0), 2),
+                    "squad_power": round(float(row[5] or 0.0), 1),
+                })
+
+            cur.execute("""
+                SELECT AVG((features->>'elo_rating')::float)
+                FROM feature_store fs
+                JOIN teams t ON fs.team_id = t.id
+                WHERE t.team_name = %s
+            """, (db_name,))
+            avg_elo = cur.fetchone()[0] or 1500
+
+            cur.execute("""
+                SELECT AVG(
+                    (1.0 / NULLIF(m.odds_home, 0)) +
+                    (1.0 / NULLIF(m.odds_draw, 0)) +
+                    (1.0 / NULLIF(m.odds_away, 0))
+                )
+                FROM match_records m
+                JOIN teams th ON m.home_team_id = th.id
+                WHERE th.team_name = %s AND m.odds_home IS NOT NULL
+            """, (db_name,))
+            overround = cur.fetchone()[0] or 1.04
+        conn.close()
+    except Exception as e:
+        print(f"Feature series DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Unable to load feature store data")
+
+    if not snapshots:
+        raise HTTPException(status_code=404, detail=f"No feature data found for {team_name}")
+
+    sentiments = [item["sentiment"] for item in snapshots]
+    sentiment_range = max(sentiments) - min(sentiments) if sentiments else 0
+    if sentiment_range >= 0.35:
+        volatility = "High"
+    elif sentiment_range >= 0.15:
+        volatility = "Medium"
+    else:
+        volatility = "Low"
+
+    latest = snapshots[-1]
+    return {
+        "team": team_name,
+        "snapshots": snapshots,
+        "summary": {
+            "avg_elo": round(float(avg_elo), 1),
+            "latest_elo": latest["elo"],
+            "latest_sdi": latest["sdi"],
+            "latest_form": latest["form"],
+            "sentiment_volatility": volatility,
+            "market_overround": round(float(overround) * 100, 1),
+        },
+    }
+
+@app.post("/backtest")
+def run_backtest(request: BacktestRequest):
+    try:
+        simulator = FPredictSimulator(initial_bankroll=request.initial_bankroll)
+        report = simulator.run_backtest(
+            season=request.season,
+            kelly_fraction=max(0.05, min(request.kelly_fraction, 1.0)) * 0.2,
+            initial_bankroll=request.initial_bankroll,
+        )
+        simulator.conn.close()
+        return report
+    except Exception as e:
+        print(f"Backtest Error: {e}")
+        raise HTTPException(status_code=500, detail="Backtest simulation failed")
 
 def get_historical_matches(home_name: str, away_name: str, limit: int = 5):
     db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
