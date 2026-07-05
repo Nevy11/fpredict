@@ -74,6 +74,15 @@ The project's maintenance and development are structured around the football cal
    yarn install
    yarn run dev
    ```
+   **Deploying to Cloudflare:**
+   The frontend is configured as a TanStack Start application, meaning it can be easily deployed to Cloudflare Workers using Wrangler.
+   
+   **Important Note:** The Cloudflare Vite plugin requires **Node.js v22.12.0 or higher**. Ensure your environment is updated (e.g., `nvm use 22`) before building.
+
+   To build and deploy the project, navigate to `fpredict_web` and run:
+   ```bash
+   yarn run deploy
+   ```
 
 4. **Mobile Application (Flutter):**
    To run the mobile app, navigate to the `fpredict_app` directory, get the Flutter dependencies, and run the app:

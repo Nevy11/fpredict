@@ -69,6 +69,8 @@ def get_team_features(team_name: str):
         print(f"DB Error: {e}")
     return dict(FALLBACK_FEATURES)
 
+from typing import List, Dict, Any
+
 class PredictionRequest(BaseModel):
     home_team: str
     away_team: str
@@ -77,6 +79,40 @@ class PredictionResponse(BaseModel):
     home: float
     draw: float
     away: float
+    odds: List[float]
+    value_bets: List[Dict[str, Any]]
+    home_features: Dict[str, Any]
+    away_features: Dict[str, Any]
+    historical_matches: List[Dict[str, Any]]
+
+def get_historical_matches(home_name: str, away_name: str, limit: int = 5):
+    db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
+    db_a_name = TEAM_NAME_MAPPING.get(away_name, away_name)
+    matches = []
+    try:
+        conn = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host=localhost")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT m.match_date, th.team_name, ta.team_name, m.home_goals, m.away_goals
+                FROM match_records m
+                JOIN teams th ON m.home_team_id = th.id
+                JOIN teams ta ON m.away_team_id = ta.id
+                WHERE (th.team_name = %s AND ta.team_name = %s)
+                   OR (th.team_name = %s AND ta.team_name = %s)
+                ORDER BY m.match_date DESC
+                LIMIT %s
+            """, (db_h_name, db_a_name, db_a_name, db_h_name, limit))
+            for row in cur.fetchall():
+                matches.append({
+                    "date": row[0].strftime("%Y-%m-%d") if hasattr(row[0], 'strftime') else str(row[0]),
+                    "home_team": row[1],
+                    "away_team": row[2],
+                    "home_goals": row[3],
+                    "away_goals": row[4]
+                })
+    except Exception as e:
+        print(f"Historical Match DB Error: {e}")
+    return matches
 
 def get_match_odds(home_name: str, away_name: str, elo_home: float, elo_away: float):
     # 1. Try to fetch live odds from The Odds API (Reliable Source)
@@ -174,10 +210,19 @@ def predict(request: PredictionRequest):
 
     probs = engine.ensemble.predict(features_a_df, features_b)
     
+    recs = engine.trade_recommendation(request.home_team, request.away_team, odds[0], odds[1], odds[2], features_a_df, features_b)
+    
+    history = get_historical_matches(request.home_team, request.away_team)
+
     return {
         "away": probs[0] * 100,
         "draw": probs[1] * 100,
-        "home": probs[2] * 100
+        "home": probs[2] * 100,
+        "odds": odds,
+        "value_bets": recs,
+        "home_features": h_features,
+        "away_features": a_features,
+        "historical_matches": history
     }
 
 if __name__ == "__main__":
