@@ -31,10 +31,16 @@ The system is built on a robust, scalable architecture separated into distinct l
 - `src/feature_store/`: Batch generation and computation of advanced features.
 - `src/models/`: Predictive model definitions, saved weights (`tower_a.json`, `tower_b.pth`), and the ensemble fusion logic.
 - `data/`: Local storage for raw HTML files and historical CSV datasets.
-- `fpredict_app/`: Application frontend / interface.
+- `fpredict_web/`: The primary Web Application interface. Built with **React 19**, **Vite**, **TailwindCSS**, and **TanStack Router**, it provides a stunning, glassmorphic UI for running live predictions, viewing the match schedule, and interacting with the backend API.
+- `fpredict_app/`: Mobile application frontend / interface built with Flutter.
 - `supabase/`: Supabase configuration and edge functions.
 
-## ⚙️ Operational Workflow
+## 🌐 Web Interface
+
+The frontend (`fpredict_web`) is designed as a modern, high-performance portal to the Quantum predictive engine:
+- **Architecture:** Uses a Vite-powered React architecture with TanStack Router for type-safe routing.
+- **Aesthetics:** Implements a premium "Glassmorphism" UI with deep purples, sleek translucency, and CSS-driven micro-animations. 
+- **Integration:** Directly hooks into the FastAPI backend. It allows users to select matchups, after which the backend automatically fetches live PostgreSQL data (or synthesizes implied odds) to compute True Ensemble Probabilities in real-time.
 
 The project's maintenance and development are structured around the football calendar:
 - **Weekdays:** Focus on low-cognition monitoring, scraping validation, and regex adjustments.
