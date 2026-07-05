@@ -78,13 +78,48 @@ class PredictionResponse(BaseModel):
     draw: float
     away: float
 
+def get_match_odds(home_name: str, away_name: str, elo_home: float, elo_away: float):
+    db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
+    db_a_name = TEAM_NAME_MAPPING.get(away_name, away_name)
+    try:
+        conn = psycopg2.connect(f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host=localhost")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT m.odds_home, m.odds_draw, m.odds_away
+                FROM match_records m
+                JOIN teams th ON m.home_team_id = th.id
+                JOIN teams ta ON m.away_team_id = ta.id
+                WHERE th.team_name = %s AND ta.team_name = %s
+                  AND m.odds_home IS NOT NULL
+                ORDER BY m.match_date DESC
+                LIMIT 1
+            """, (db_h_name, db_a_name))
+            res = cur.fetchone()
+            if res:
+                return [float(res[0]), float(res[1]), float(res[2])]
+    except Exception:
+        pass
+    
+    # Fallback: calculate implied odds from Elo with standard home advantage
+    dr = (elo_home + 50) - elo_away
+    p_home = 1 / (1 + 10 ** (-dr / 400))
+    p_draw = 0.24 # Typical EPL draw probability
+    p_home_adj = p_home * (1 - p_draw)
+    p_away_adj = (1 - p_home) * (1 - p_draw)
+    
+    margin = 1.05 # Bookmaker overround
+    return [
+        round(1 / (p_home_adj * margin), 2),
+        round(1 / (p_draw * margin), 2),
+        round(1 / (p_away_adj * margin), 2)
+    ]
+
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest):
     h_features = get_team_features(request.home_team)
     a_features = get_team_features(request.away_team)
     
-    # In a fully live environment, odds would be fetched dynamically. Using baselines for now.
-    odds = [2.00, 3.20, 3.50]
+    odds = get_match_odds(request.home_team, request.away_team, h_features['elo'], a_features['elo'])
     
     features_a_dict = {
         'h_elo': h_features['elo'], 'h_squad_power': h_features['power'], 'h_sdi': h_features['sdi'], 'h_form_ppg': h_features['form'], 'h_form_gd': h_features['gd'], 'h_sentiment': h_features['sent'],

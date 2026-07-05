@@ -104,7 +104,7 @@ function Index() {
               </select>
             </div>
 
-            <button type="submit" className="btn-primary" disabled={isPredicting}>
+            <button type="submit" className="btn-primary" style={{ marginTop: '1.5rem' }} disabled={isPredicting}>
               {isPredicting ? 'Calculating Probabilities...' : 'Run Prediction Engine'}
             </button>
           </form>
