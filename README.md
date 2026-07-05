@@ -72,6 +72,22 @@ To verify that the core predictive engine and email alerting systems are functio
    python test_smtp.py
    ```
 
+## 📈 Profitability Backtesting
+
+To validate the financial viability of the models, the system includes a **Historical Dry-Run Simulator** (`src/models/simulator.py`). 
+The backtesting algorithm operates as follows:
+
+1. **Chronological Simulation**: It iterates through historical matches from the database, retrieving the precise point-in-time state of the Feature Store (Elo, SDI, form, sentiment, etc.) exactly as it was on each `match_date` to prevent lookahead bias.
+2. **Probability Generation**: It passes these historical features into the Two-Tower Ensemble to calculate the "true" mathematical probabilities of each match.
+3. **Value Bet Identification**: It compares the model's true probabilities against actual historical bookmaker odds to find positive expected value (EV) edges.
+4. **Fractional Kelly Sizing**: For identified Value Bets, it determines the optimal wager size using the **Kelly Criterion** (`f* = (bp - q) / b`), scaled down to a **10% Fractional Kelly** strategy (`bet_amount = bankroll * kelly * 0.1`) for safer risk management.
+5. **Bankroll Compounding**: Starting with a mock initial bankroll (e.g., $1000), it chronologically applies simulated wins and losses based on actual match outcomes to demonstrate the compounded Return on Investment (ROI) over a season.
+
+You can run the backtest simulation via:
+```bash
+python -m src.models.simulator
+```
+
 ## 🔒 Security & Deployment
 
 - **Environment Variables:** All credentials and API keys must be strictly stored in a `.env` file (git-ignored).

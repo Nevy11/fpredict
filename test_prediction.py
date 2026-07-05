@@ -41,10 +41,38 @@ def predict_match(h_name, a_name, h_features, a_features, odds):
     print(f"Home Win: {probs[2]:.2%}")
 
 if __name__ == "__main__":
-    # Hypothetical values based on team status
-    # City (Maresca coach = lower SDI/Sentiment) vs Arsenal (Champ = Stable)
-    city_features = {'elo': 1716, 'power': 85.0, 'sdi': 0.8, 'form': 2.5, 'sent': -0.03}
-    ars_features = {'elo': 1709, 'power': 82.0, 'sdi': 0.95, 'form': 2.4, 'sent': 0.01}
-    odds = [1.90, 3.50, 4.00] # City favorite
+    # 2026/2027 EPL Season Teams with hypothetical baseline features
+    epl_teams_26_27 = {
+        "Arsenal": {'elo': 1715, 'power': 85.0, 'sdi': 0.95, 'form': 2.4, 'sent': 0.05},
+        "Aston Villa": {'elo': 1650, 'power': 78.0, 'sdi': 0.90, 'form': 1.8, 'sent': 0.02},
+        "Bournemouth": {'elo': 1590, 'power': 72.0, 'sdi': 0.85, 'form': 1.4, 'sent': 0.00},
+        "Brentford": {'elo': 1595, 'power': 73.0, 'sdi': 0.88, 'form': 1.3, 'sent': -0.01},
+        "Brighton & Hove Albion": {'elo': 1610, 'power': 74.0, 'sdi': 0.92, 'form': 1.5, 'sent': 0.01},
+        "Chelsea": {'elo': 1670, 'power': 81.0, 'sdi': 0.85, 'form': 1.9, 'sent': -0.02},
+        "Coventry City": {'elo': 1520, 'power': 65.0, 'sdi': 1.05, 'form': 2.0, 'sent': 0.08},
+        "Crystal Palace": {'elo': 1600, 'power': 72.0, 'sdi': 0.90, 'form': 1.4, 'sent': 0.00},
+        "Everton": {'elo': 1580, 'power': 71.0, 'sdi': 0.85, 'form': 1.2, 'sent': -0.03},
+        "Fulham": {'elo': 1585, 'power': 72.0, 'sdi': 0.88, 'form': 1.3, 'sent': 0.00},
+        "Hull City": {'elo': 1515, 'power': 64.0, 'sdi': 1.02, 'form': 1.9, 'sent': 0.07},
+        "Ipswich Town": {'elo': 1530, 'power': 66.0, 'sdi': 1.00, 'form': 1.8, 'sent': 0.05},
+        "Leeds United": {'elo': 1560, 'power': 70.0, 'sdi': 0.95, 'form': 1.6, 'sent': 0.03},
+        "Liverpool": {'elo': 1705, 'power': 84.0, 'sdi': 0.90, 'form': 2.2, 'sent': 0.04},
+        "Manchester City": {'elo': 1730, 'power': 86.0, 'sdi': 0.88, 'form': 2.5, 'sent': -0.01},
+        "Manchester United": {'elo': 1660, 'power': 80.0, 'sdi': 0.82, 'form': 1.7, 'sent': -0.04},
+        "Newcastle United": {'elo': 1680, 'power': 82.0, 'sdi': 0.92, 'form': 2.0, 'sent': 0.02},
+        "Nottingham Forest": {'elo': 1575, 'power': 70.0, 'sdi': 0.86, 'form': 1.2, 'sent': -0.02},
+        "Sunderland": {'elo': 1540, 'power': 68.0, 'sdi': 0.98, 'form': 1.7, 'sent': 0.06},
+        "Tottenham Hotspur": {'elo': 1675, 'power': 81.0, 'sdi': 0.89, 'form': 1.9, 'sent': 0.01}
+    }
     
-    predict_match("Man City", "Arsenal", city_features, ars_features, odds)
+    # Example match 1: Heavyweight Clash
+    home_team_1 = "Manchester City"
+    away_team_1 = "Arsenal"
+    odds_1 = [1.90, 3.50, 4.00] # Hypothetical odds
+    predict_match(home_team_1, away_team_1, epl_teams_26_27[home_team_1], epl_teams_26_27[away_team_1], odds_1)
+
+    # Example match 2: Promoted vs Established
+    home_team_2 = "Coventry City"
+    away_team_2 = "Chelsea"
+    odds_2 = [5.50, 4.20, 1.55]
+    predict_match(home_team_2, away_team_2, epl_teams_26_27[home_team_2], epl_teams_26_27[away_team_2], odds_2)
