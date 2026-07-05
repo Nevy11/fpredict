@@ -40,6 +40,38 @@ The project's maintenance and development are structured around the football cal
 - **Weekdays:** Focus on low-cognition monitoring, scraping validation, and regex adjustments.
 - **Weekends:** Dedicated to deep algorithmic engineering, modeling improvements, and analyzing match outcomes.
 
+## ▶️ Running the Project
+
+1. **Environment Setup:** Ensure all your credentials and API keys are stored in a `.env` file at the root of the project.
+2. **Web Application:**
+   To run the frontend/web app, navigate to the `fpredict_app` directory, install dependencies using `yarn`, and start the development server:
+   ```bash
+   cd fpredict_app
+   yarn install
+   yarn run dev
+   ```
+3. **Supabase Functions:**
+   To deploy the Supabase Edge Functions:
+   ```bash
+   supabase functions deploy <function_name> --no-verify-jwt
+   ```
+
+## 🧪 Running Tests
+
+To verify that the core predictive engine and email alerting systems are functioning correctly, you can run the test scripts provided in the root directory:
+
+1. **Prediction Engine Test:**
+   Tests the Two-Tower ensemble (XGBoost + PyTorch) model predictions by loading local model weights and running a hypothetical match (e.g., Man City vs Arsenal).
+   ```bash
+   python test_prediction.py
+   ```
+
+2. **Email Alert Test:**
+   Tests the SMTP configuration and notification system to ensure alerts can be sent properly.
+   ```bash
+   python test_smtp.py
+   ```
+
 ## 🔒 Security & Deployment
 
 - **Environment Variables:** All credentials and API keys must be strictly stored in a `.env` file (git-ignored).
