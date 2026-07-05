@@ -29,7 +29,7 @@ function Index() {
   const [prediction, setPrediction] = useState<{ home: number, draw: number, away: number } | null>(null)
   const [isPredicting, setIsPredicting] = useState(false)
 
-  const handlePredict = (e: React.FormEvent) => {
+  const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault()
     if (homeTeam === awayTeam) {
       alert("Home and Away teams must be different!")
@@ -37,21 +37,35 @@ function Index() {
     }
     
     setIsPredicting(true)
-    // Simulate API call to the Python Two-Tower ensemble
-    setTimeout(() => {
-      // Mocked calculation based on team names to make it seem dynamic
-      const hash = homeTeam.length * awayTeam.length
-      const baseHome = 40 + (hash % 30)
-      const baseDraw = 20 + (hash % 15)
-      const baseAway = 100 - baseHome - baseDraw
+    
+    try {
+      const response = await fetch("http://localhost:8000/predict", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          home_team: homeTeam,
+          away_team: awayTeam
+        })
+      });
       
+      if (!response.ok) {
+        throw new Error("Failed to fetch prediction");
+      }
+      
+      const data = await response.json();
       setPrediction({
-        home: baseHome,
-        draw: baseDraw,
-        away: baseAway
-      })
-      setIsPredicting(false)
-    }, 1200)
+        home: data.home,
+        draw: data.draw,
+        away: data.away
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Error fetching prediction");
+    } finally {
+      setIsPredicting(false);
+    }
   }
 
   return (

@@ -43,14 +43,31 @@ The project's maintenance and development are structured around the football cal
 ## ▶️ Running the Project
 
 1. **Environment Setup:** Ensure all your credentials and API keys are stored in a `.env` file at the root of the project.
-2. **Mobile Application (Flutter):**
-   To run the frontend app, navigate to the `fpredict_app` directory, get the Flutter dependencies, and run the app:
+
+2. **Backend API (FastAPI):**
+   To serve predictions to the frontend applications, run the FastAPI server:
+   ```bash
+   pip install fastapi uvicorn pydantic
+   python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+3. **Web Application (React/Vite):**
+   To run the web frontend, navigate to the `fpredict_web` directory, install dependencies, and run the development server:
+   ```bash
+   cd fpredict_web
+   yarn install
+   yarn run dev
+   ```
+
+4. **Mobile Application (Flutter):**
+   To run the mobile app, navigate to the `fpredict_app` directory, get the Flutter dependencies, and run the app:
    ```bash
    cd fpredict_app
    flutter pub get
    flutter run
    ```
-3. **Supabase Functions:**
+
+5. **Supabase Functions:**
    To deploy the Supabase Edge Functions:
    ```bash
    supabase functions deploy <function_name> --no-verify-jwt
