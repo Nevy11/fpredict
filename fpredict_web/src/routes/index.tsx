@@ -2,8 +2,19 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { fetchPrediction, fetchTeams, type PredictionResult } from '../lib/api'
 
+type IndexSearch = {
+  home?: string
+  away?: string
+}
+
 export const Route = createFileRoute('/')({
   component: Index,
+  validateSearch: (search: Record<string, unknown>): IndexSearch => {
+    return {
+      home: search.home as string | undefined,
+      away: search.away as string | undefined,
+    }
+  },
 })
 
 const FALLBACK_TEAMS = [
@@ -25,9 +36,10 @@ const MOCK_SCHEDULE = [
 ]
 
 function Index() {
+  const { home, away } = Route.useSearch()
   const [teams, setTeams] = useState<string[]>(FALLBACK_TEAMS)
-  const [homeTeam, setHomeTeam] = useState('Manchester City')
-  const [awayTeam, setAwayTeam] = useState('Arsenal')
+  const [homeTeam, setHomeTeam] = useState(home || 'Manchester City')
+  const [awayTeam, setAwayTeam] = useState(away || 'Arsenal')
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null)
   const [isPredicting, setIsPredicting] = useState(false)
   const [error, setError] = useState('')
@@ -43,6 +55,11 @@ function Index() {
         // Keep fallback teams when API is offline.
       })
   }, [])
+
+  useEffect(() => {
+    if (home) setHomeTeam(home)
+    if (away) setAwayTeam(away)
+  }, [home, away])
 
   const handlePredict = async (event: React.FormEvent) => {
     event.preventDefault()
