@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export type PredictionResult = {
@@ -174,16 +176,91 @@ export function runBacktest(params: {
   })
 }
 
-export function fetchManagerNames() {
+export async function fetchManagerNames() {
+  const { data, error } = await supabase.from('current_managers').select('manager_name')
+  if (!error && data) {
+    return Array.from(new Set(data.map(d => d.manager_name)))
+  }
   return request<{ managers: string[] }>('/managers').then((payload) => payload.managers)
 }
 
-export function fetchManagerLookup(homeTeam: string, awayTeam: string) {
+export async function fetchManagerLookup(homeTeam: string, awayTeam: string) {
+  const { data, error } = await supabase.from('current_managers')
+    .select('*')
+    .in('team_name', [homeTeam, awayTeam])
+
+  if (!error && data && data.length > 0) {
+    const homeData = data.find(d => d.team_name === homeTeam)
+    const awayData = data.find(d => d.team_name === awayTeam)
+
+    const calcForm = (last_5: string[]) => {
+      if (!last_5 || last_5.length === 0) return { ppg: 1.3, win_rate: 0.33, matches: 0 }
+      let pts = 0; let wins = 0;
+      for (const res of last_5) {
+        if (res === 'W') { pts += 3; wins += 1 }
+        else if (res === 'D') pts += 1
+      }
+      return { ppg: pts / last_5.length, win_rate: wins / last_5.length, matches: last_5.length }
+    }
+
+    const createSide = (d: any, team: string): ManagerSide => {
+      if (!d) return {
+        name: 'Unknown', team, nationality: 'Unknown', tactical_style: 'balanced',
+        formation: '4-3-3', inferred: true, history: [], form: { ppg: 0, win_rate: 0, matches: 0 }
+      }
+      return {
+        name: d.manager_name,
+        team: d.team_name,
+        nationality: 'Unknown',
+        tactical_style: (d.tactical_style || 'balanced') as TacticalStyle,
+        formation: '4-3-3',
+        inferred: false,
+        history: [],
+        form: calcForm(d.last_5_games)
+      }
+    }
+
+    // Try to get H2H from backend in the background or just return mock
+    return {
+      home: createSide(homeData, homeTeam),
+      away: createSide(awayData, awayTeam),
+      head_to_head: { meetings: 0, home_manager_wins: 0, away_manager_wins: 0, draws: 0 }
+    }
+  }
+
   const params = new URLSearchParams({ home_team: homeTeam, away_team: awayTeam })
   return request<ManagerLookupResult>(`/managers/lookup?${params.toString()}`)
 }
 
-export function fetchManagerProfile(managerName: string, team?: string) {
+export async function fetchManagerProfile(managerName: string, team?: string) {
+  const { data, error } = await supabase.from('current_managers')
+    .select('*')
+    .eq('manager_name', managerName)
+    .limit(1)
+
+  if (!error && data && data.length > 0) {
+    const d = data[0]
+    const calcForm = (last_5: string[]) => {
+      if (!last_5 || last_5.length === 0) return { ppg: 1.3, win_rate: 0.33, matches: 0 }
+      let pts = 0; let wins = 0;
+      for (const res of last_5) {
+        if (res === 'W') { pts += 3; wins += 1 }
+        else if (res === 'D') pts += 1
+      }
+      return { ppg: pts / last_5.length, win_rate: wins / last_5.length, matches: last_5.length }
+    }
+    return {
+      name: d.manager_name,
+      team: team || d.team_name,
+      nationality: 'Unknown',
+      tactical_style: (d.tactical_style || 'balanced') as TacticalStyle,
+      formation: '4-3-3',
+      inferred: false,
+      history: [],
+      form: calcForm(d.last_5_games)
+    }
+  }
+
   const query = team ? `?team=${encodeURIComponent(team)}` : ''
   return request<ManagerSide>(
     `/managers/${encodeURIComponent(managerName)}/profile${query}`,
