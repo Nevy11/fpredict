@@ -6,8 +6,8 @@ FPredict is an autonomous, self-adjusting predictive engine designed specificall
 
 The system is built on a robust, scalable architecture separated into distinct layers:
 
-- **Ingestion Layer:** Powered by Python `asyncio` along with `Playwright` (Stealth) and `curl_cffi` for reliable impersonation and stealth scraping.
-- **Storage:** Dual-Persistence strategy utilizing a Local PostgreSQL database as the primary offline-first fallback and Remote Supabase JSONB for cloud sync.
+- **Ingestion Layer:** Powered by Python `asyncio` along with `Playwright` (Stealth) and `curl_cffi` for reliable impersonation and stealth scraping. Includes automated background cron jobs that continually update current EPL managers and track their recent form (last 5 games) to align tactical models.
+- **Storage:** Dual-Persistence strategy utilizing a Local PostgreSQL database as the primary offline-first fallback and Remote Supabase for cloud sync (including a dedicated `current_managers` table).
 - **Feature Store:** Dynamically computes "Dynamic State Vectors", which include advanced metrics such as the Squad Degradation Index (SDI) and Tactical Blueprints.
 - **NLP Tower:** Integrates Gemini Flash-Lite via the `google-generativeai` SDK to perform sentiment analysis on recent news headlines.
 - **Predictive Towers (Two-Tower Ensemble):**
@@ -16,7 +16,7 @@ The system is built on a robust, scalable architecture separated into distinct l
 
 ## 🛠 Tech Stack
 
-- **Database:** PostgreSQL (v16+), Supabase CLI (v2.67+)
+- **Database:** PostgreSQL (v16+), Supabase CLI (v2.67+), `@supabase/supabase-js`
 - **Scraping:** `playwright`, `playwright-stealth`, `curl_cffi`
 - **Data Processing:** `pandas`, `psycopg2`
 - **NLP:** `google-generativeai` (Gemini SDK)
@@ -40,7 +40,7 @@ The system is built on a robust, scalable architecture separated into distinct l
 The frontend (`fpredict_web`) is designed as a modern, high-performance portal to the Quantum predictive engine:
 - **Architecture:** Uses a Vite-powered React architecture with TanStack Router for type-safe routing.
 - **Aesthetics:** Implements a premium "Glassmorphism" UI with deep purples, sleek translucency, and CSS-driven micro-animations. 
-- **Integration:** Directly hooks into the FastAPI backend. It allows users to select matchups, after which the backend automatically fetches live PostgreSQL data (or synthesizes implied odds) to compute True Ensemble Probabilities in real-time.
+- **Integration:** Directly hooks into the FastAPI backend for complex ensemble blending. Additionally, it queries Supabase directly using `@supabase/supabase-js` to fetch the latest manager profiles, recent form (last 5 games), and tactical styles, bypassing the backend for real-time manager updates.
 
 The project's maintenance and development are structured around the football calendar:
 - **Weekdays:** Focus on low-cognition monitoring, scraping validation, and regex adjustments.
