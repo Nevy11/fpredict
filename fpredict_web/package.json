@@ -23,11 +23,13 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "isomorphic-ws": "^5.0.0",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.9.2",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.43.0",
