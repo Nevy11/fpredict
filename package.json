@@ -1,0 +1,11 @@
+{
+  "name": "fpredict-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd fpredict_web && yarn dev\" \"uvicorn src.api.main:app --reload\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
+  }
+}
