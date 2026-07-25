@@ -3,6 +3,7 @@ import psycopg2
 import asyncio
 import random
 from datetime import date
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,13 +14,25 @@ from src.models.ensemble import FPredictEngine
 from src.models.simulator import FPredictSimulator
 from src.models.manager_engine import ManagerPredictionEngine
 from src.managers.repository import ManagerRepository
+from src.managers.validator import validate_managers_on_startup
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = "fpredict_db"
 
-app = FastAPI(title="FPredict API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: run the manager validation check
+    loop = asyncio.get_running_loop()
+    repo = get_manager_repo()
+    # Run the synchronous web scraping check in a threadpool so it doesn't block startup
+    await loop.run_in_executor(None, validate_managers_on_startup, repo)
+    yield
+    # Shutdown logic (if any)
+    repo.close()
+
+app = FastAPI(title="FPredict API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -38,6 +38,9 @@ class ManagerRepository:
         if self._loaded:
             return
 
+        self._team_ids.clear()
+        self._tenures.clear()
+
         try:
             with self.conn.cursor() as cur:
                 cur.execute("SELECT id, team_name FROM teams")
@@ -105,6 +108,58 @@ class ManagerRepository:
 
         fallback_name = CURRENT_MANAGERS_2025.get(team_name, "League Average")
         return self._profile_from_name(fallback_name, team_name, inferred=True)
+
+    def update_current_manager(self, team_name: str, new_manager_name: str) -> None:
+        """Updates the current manager for a team in the database."""
+        if self._using_seed_fallback:
+            print(f"Skipping DB update for {team_name} -> {new_manager_name} because repository is using seed data.")
+            return
+            
+        try:
+            with self.conn.cursor() as cur:
+                # Get the team_id
+                cur.execute("SELECT id FROM teams WHERE team_name = %s", (team_name,))
+                team_res = cur.fetchone()
+                if not team_res:
+                    return
+                team_id = team_res[0]
+
+                # End the current tenure if any
+                cur.execute(
+                    "UPDATE manager_tenures SET is_current = FALSE, end_date = CURRENT_DATE WHERE team_id = %s AND is_current = TRUE",
+                    (team_id,)
+                )
+
+                # Ensure new manager exists in the managers table
+                cur.execute("SELECT id FROM managers WHERE name = %s", (new_manager_name,))
+                manager_res = cur.fetchone()
+                if not manager_res:
+                    cur.execute(
+                        "INSERT INTO managers (name, nationality, tactical_style, preferred_formation) VALUES (%s, %s, %s, %s) RETURNING id",
+                        (new_manager_name, "Unknown", "balanced", "4-3-3")
+                    )
+                    manager_id = cur.fetchone()[0]
+                else:
+                    manager_id = manager_res[0]
+
+                # Start the new tenure
+                cur.execute(
+                    "INSERT INTO manager_tenures (manager_id, team_id, start_date, is_current) VALUES (%s, %s, CURRENT_DATE, TRUE)",
+                    (manager_id, team_id)
+                )
+
+                # Update the manager_name field in teams table
+                cur.execute(
+                    "UPDATE teams SET manager_name = %s WHERE id = %s",
+                    (new_manager_name, team_id)
+                )
+
+                self.conn.commit()
+                # Invalidate cache so it re-reads
+                self._loaded = False
+        except Exception as e:
+            self.conn.rollback()
+            print(f"Failed to update current manager {new_manager_name} for {team_name}: {e}")
 
     def get_current_manager(self, team_name: str) -> dict[str, Any]:
         self._load_cache()
