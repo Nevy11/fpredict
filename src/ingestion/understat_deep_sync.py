@@ -86,7 +86,7 @@ class UnderstatDeepSync:
                     
                     # 1. Update/Insert Player
                     cur.execute(
-                        "INSERT INTO players (name, team_id, position) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING RETURNING id",
+                        "INSERT INTO players (name, team_id, position) VALUES (%s, %s, %s) ON CONFLICT (name, team_id) DO NOTHING RETURNING id",
                         (p_name, team_id, pos)
                     )
                     res = cur.fetchone()

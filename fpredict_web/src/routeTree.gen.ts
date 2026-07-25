@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PlayersRouteImport } from './routes/players'
 import { Route as ManagersRouteImport } from './routes/managers'
 import { Route as FixturesRouteImport } from './routes/fixtures'
 import { Route as FeaturesRouteImport } from './routes/features'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayersRoute = PlayersRouteImport.update({
+  id: '/players',
+  path: '/players',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ManagersRoute = ManagersRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
+  '/players': typeof PlayersRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/features'
     | '/fixtures'
     | '/managers'
+    | '/players'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/features'
     | '/fixtures'
     | '/managers'
+    | '/players'
     | '/settings'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/features'
     | '/fixtures'
     | '/managers'
+    | '/players'
     | '/settings'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   FeaturesRoute: typeof FeaturesRoute
   FixturesRoute: typeof FixturesRoute
   ManagersRoute: typeof ManagersRoute
+  PlayersRoute: typeof PlayersRoute
   SettingsRoute: typeof SettingsRoute
 }
 
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/players': {
+      id: '/players'
+      path: '/players'
+      fullPath: '/players'
+      preLoaderRoute: typeof PlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/managers': {
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeaturesRoute: FeaturesRoute,
   FixturesRoute: FixturesRoute,
   ManagersRoute: ManagersRoute,
+  PlayersRoute: PlayersRoute,
   SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
