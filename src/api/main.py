@@ -8,7 +8,19 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
+
+def convert_to_native(obj):
+    if isinstance(obj, dict):
+        return {k: convert_to_native(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_native(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_to_native(v) for v in obj)
+    elif isinstance(obj, np.generic):
+        return obj.item()
+    return obj
 
 from src.models.ensemble import FPredictEngine
 from src.models.simulator import FPredictSimulator
@@ -294,13 +306,13 @@ def predict_with_manager(request: ManagerPredictionRequest):
         print(f"Manager prediction error: {error}")
         raise HTTPException(status_code=500, detail="Manager prediction failed")
 
-    return {
+    return convert_to_native({
         **result,
         "odds": odds,
         "home_features": h_features,
         "away_features": a_features,
         "historical_matches": history,
-    }
+    })
 
 def get_historical_matches(home_name: str, away_name: str, limit: int = 5):
     db_h_name = TEAM_NAME_MAPPING.get(home_name, home_name)
