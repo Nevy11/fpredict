@@ -1,0 +1,9 @@
+yarn run v1.22.22
+$ vite dev --port 3000
+Port 3000 is in use, trying another one...
+11:12:08 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+
+  VITE v8.1.3  ready in 1881 ms
+
+  ➜  Local:   http://localhost:3001/
+  ➜  Network: use --host to expose

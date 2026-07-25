@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { CalendarDays, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronRight, ChevronLeft } from 'lucide-react'
+import { useState } from 'react'
 
 export const Route = createFileRoute('/fixtures')({
   component: Fixtures,
@@ -65,8 +66,68 @@ const getTeamInitial = (name: string) => {
   return name.substring(0, 3).toUpperCase()
 }
 
+// Robust date parser for "MMM DD, YYYY"
+const parseDateRobust = (dateStr: string) => {
+  const months: Record<string, number> = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  }
+  const parts = dateStr.replace(',', '').split(' ')
+  if (parts.length === 3) {
+    const month = months[parts[0]] ?? 0
+    const day = parseInt(parts[1], 10)
+    const year = parseInt(parts[2], 10)
+    return new Date(year, month, day)
+  }
+  return new Date(dateStr)
+}
+
 function Fixtures() {
-  const matchweeks = Array.from(new Set(MOCK_FIXTURES.map((f) => f.matchweek))).sort((a, b) => a - b)
+  // Group fixtures by month and year
+  const fixturesByMonth = MOCK_FIXTURES.reduce((acc, fixture) => {
+    const dateObj = parseDateRobust(fixture.date)
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    const monthYear = `${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+    
+    if (!acc[monthYear]) {
+      acc[monthYear] = []
+    }
+    acc[monthYear].push(fixture)
+    return acc
+  }, {} as Record<string, typeof MOCK_FIXTURES>)
+
+  const monthYears = Object.keys(fixturesByMonth).sort((a, b) => {
+    // "August 2026" -> parse roughly for sorting
+    const dateA = new Date(a)
+    const dateB = new Date(b)
+    return (isNaN(dateA.getTime()) ? 0 : dateA.getTime()) - (isNaN(dateB.getTime()) ? 0 : dateB.getTime())
+  })
+  
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
+  const currentMonthYear = monthYears[currentMonthIndex]
+  const currentFixtures = currentMonthYear ? fixturesByMonth[currentMonthYear] : []
+
+  // Calendar calculations
+  let daysInMonth = 30
+  let firstDay = 0
+  
+  if (currentFixtures.length > 0) {
+    const firstFixtureDate = parseDateRobust(currentFixtures[0].date)
+    const year = firstFixtureDate.getFullYear()
+    const month = firstFixtureDate.getMonth()
+    daysInMonth = new Date(year, month + 1, 0).getDate()
+    firstDay = new Date(year, month, 1).getDay()
+  }
+
+  const days = []
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null)
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i)
+  }
+
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
     <div className="container page-stack relative pb-20">
@@ -84,73 +145,96 @@ function Fixtures() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-8 w-full">
-        {matchweeks.map((week) => {
-          const fixturesInWeek = MOCK_FIXTURES.filter((f) => f.matchweek === week)
-          return (
-            <div key={week} className="glass-card relative group overflow-hidden flex flex-col h-full border border-white/10 hover:border-cyan-500/30 transition-all duration-500 p-6 md:p-8 !h-[550px]">
-              {/* Inner top gradient highlight */}
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-600 opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-                <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                  Matchweek {week}
-                </h2>
-                <span className="text-xs font-medium px-3 py-1 bg-white/5 border border-white/10 rounded-full text-gray-400">
-                  {fixturesInWeek.length} Matches
-                </span>
-              </div>
-              
-              <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-2 schedule-list pb-2">
-                {fixturesInWeek.map((match) => (
-                  <Link
-                    to="/"
-                    search={{ home: match.home, away: match.away }}
-                    className="relative flex items-center p-4 rounded-xl bg-black/30 border border-white/5 hover:bg-black/50 hover:border-cyan-500/40 hover:shadow-[0_0_20px_rgba(0,240,255,0.1)] hover:-translate-y-1 transition-all duration-300 group/match"
-                    key={`${match.home}-${match.away}`}
-                  >
-                    {/* Home Team */}
-                    <div className="flex-1 flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-sm text-gray-300 group-hover/match:text-white transition-colors text-right leading-tight">
-                          {match.home}
-                        </span>
-                        <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg bg-gradient-to-br ${getTeamGradient(match.home)}`}>
-                          {getTeamInitial(match.home)}
-                        </div>
-                      </div>
-                    </div>
+      {monthYears.length > 0 && (
+        <div className="max-w-6xl mx-auto w-full flex flex-col gap-6">
+          {/* Calendar Controls */}
+          <div className="flex items-center justify-between glass-card p-4 md:px-8 border border-white/10">
+            <button 
+              onClick={() => setCurrentMonthIndex(prev => Math.max(0, prev - 1))}
+              disabled={currentMonthIndex === 0}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors border border-white/10 hover:border-cyan-500/50 text-white"
+            >
+              <ChevronLeft size={24} />
+            </button>
+            
+            <h2 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+              {currentMonthYear}
+            </h2>
+            
+            <button 
+              onClick={() => setCurrentMonthIndex(prev => Math.min(monthYears.length - 1, prev + 1))}
+              disabled={currentMonthIndex === monthYears.length - 1}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 transition-colors border border-white/10 hover:border-cyan-500/50 text-white"
+            >
+              <ChevronRight size={24} />
+            </button>
+          </div>
 
-                    {/* VS Info */}
-                    <div className="flex flex-col items-center justify-center px-4 min-w-[90px]">
-                      <div className="text-xs font-black text-cyan-500/80 group-hover/match:text-cyan-400 tracking-widest mb-1 transition-colors">VS</div>
-                      <div className="text-[10px] text-gray-500 font-medium whitespace-nowrap">{match.date}</div>
-                      <div className="text-[10px] text-gray-500 font-medium whitespace-nowrap">{match.time}</div>
-                    </div>
-
-                    {/* Away Team */}
-                    <div className="flex-1 flex flex-col items-start gap-1">
-                      <div className="flex items-center gap-3 flex-row-reverse">
-                        <span className="font-semibold text-sm text-gray-300 group-hover/match:text-white transition-colors text-left leading-tight">
-                          {match.away}
-                        </span>
-                        <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg bg-gradient-to-br ${getTeamGradient(match.away)}`}>
-                          {getTeamInitial(match.away)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Hover indicator arrow */}
-                    <div className="absolute right-3 opacity-0 -translate-x-2 group-hover/match:opacity-100 group-hover/match:translate-x-0 transition-all duration-300 text-cyan-400">
-                      <ChevronRight size={18} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          {/* Calendar Grid */}
+          <div className="glass-card p-4 md:p-8 border border-white/10 hover:border-cyan-500/30 transition-all duration-500">
+            <div className="grid grid-cols-7 gap-2 md:gap-4 mb-4">
+              {daysOfWeek.map(day => (
+                <div key={day} className="text-center text-xs md:text-sm font-semibold text-gray-400 uppercase tracking-wider py-2">
+                  {day}
+                </div>
+              ))}
             </div>
-          )
-        })}
-      </div>
+            
+            <div className="grid grid-cols-7 gap-2 md:gap-4">
+              {days.map((day, idx) => {
+                if (day === null) {
+                  return <div key={`empty-${idx}`} className="h-28 md:h-36 bg-black/20 rounded-xl border border-white/5 opacity-40" />
+                }
+                
+                const dayFixtures = currentFixtures.filter(f => parseDateRobust(f.date).getDate() === day)
+                const hasFixtures = dayFixtures.length > 0
+                
+                return (
+                  <div 
+                    key={`day-${day}`} 
+                    className={`h-28 md:h-36 rounded-xl border p-1 md:p-3 flex flex-col gap-1 md:gap-2 overflow-y-auto custom-scrollbar transition-all duration-300
+                      ${hasFixtures 
+                        ? 'bg-black/60 border-white/10 hover:border-cyan-500/50 hover:bg-black/80 hover:shadow-[0_0_15px_rgba(0,240,255,0.05)]' 
+                        : 'bg-black/20 border-white/5 opacity-60'
+                      }`}
+                  >
+                    <span className={`text-xs md:text-sm font-bold ${hasFixtures ? 'text-cyan-400' : 'text-gray-500'}`}>
+                      {day}
+                    </span>
+                    
+                    <div className="flex flex-col gap-1.5">
+                      {dayFixtures.map(match => (
+                        <Link
+                          key={`${match.home}-${match.away}`}
+                          to="/"
+                          search={{ home: match.home, away: match.away }}
+                          className="group relative flex flex-col gap-1 p-2 rounded-lg bg-white/5 hover:bg-cyan-900/40 border border-white/5 hover:border-cyan-500/40 transition-all cursor-pointer"
+                          title={`${match.home} vs ${match.away} @ ${match.time}`}
+                        >
+                          <div className="flex items-center justify-between gap-1 w-full">
+                             <div className="flex items-center gap-1.5 truncate">
+                               <div className={`shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-br ${getTeamGradient(match.home)}`} />
+                               <span className="text-[10px] md:text-xs text-gray-300 group-hover:text-white truncate font-medium">{getTeamInitial(match.home)}</span>
+                             </div>
+                             <span className="text-[8px] text-gray-500 font-bold shrink-0">VS</span>
+                             <div className="flex items-center gap-1.5 truncate flex-row-reverse">
+                               <div className={`shrink-0 w-1.5 h-1.5 rounded-full bg-gradient-to-br ${getTeamGradient(match.away)}`} />
+                               <span className="text-[10px] md:text-xs text-gray-300 group-hover:text-white truncate font-medium">{getTeamInitial(match.away)}</span>
+                             </div>
+                          </div>
+                          <div className="text-[10px] text-cyan-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 bg-black/80 flex items-center justify-center rounded-lg backdrop-blur-sm shadow-[0_0_10px_rgba(0,240,255,0.2)]">
+                            {match.time}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
