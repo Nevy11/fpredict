@@ -39,7 +39,11 @@ The system is built on a robust, scalable architecture separated into distinct l
 
 The frontend (`fpredict_web`) is designed as a modern, high-performance portal to the Quantum predictive engine:
 - **Architecture:** Uses a Vite-powered React architecture with TanStack Router for type-safe routing.
-- **Aesthetics:** Implements a premium "Glassmorphism" UI with deep purples, sleek translucency, and CSS-driven micro-animations. 
+- **Aesthetics:** Implements a premium "Glassmorphism" UI with deep purples, sleek translucency, and Tailwind CSS v4 driven micro-animations. 
+- **Features:** 
+  - **Match Predictor:** Live simulation of matches using the backend API.
+  - **All Fixtures:** A comprehensive calendar grid showing all matches grouped by month.
+  - **Player Intelligence Hub:** An active roster directory connected to an AI training interface to teach the model player-specific traits and synergies.
 - **Integration:** Directly hooks into the FastAPI backend for complex ensemble blending. Additionally, it queries Supabase directly using `@supabase/supabase-js` to fetch the latest manager profiles, recent form (last 5 games), and tactical styles, bypassing the backend for real-time manager updates.
 
 The project's maintenance and development are structured around the football calendar:
@@ -57,7 +61,13 @@ The project's maintenance and development are structured around the football cal
      ODDS_API_KEY=your_odds_api_key # Optional, but recommended for live odds ingestion
      ```
 
-2. **Backend API (FastAPI):**
+2. **Data Ingestion (Players & Stats):**
+   To populate the local database with real Premier League players and compute their baseline Impact Scores:
+   ```bash
+   python -m src.ingestion.understat_deep_sync
+   ```
+
+3. **Backend API (FastAPI):**
    To serve predictions to the frontend applications, first ensure all backend dependencies are installed:
    ```bash
    pip install fastapi uvicorn pydantic httpx pandas psycopg2-binary xgboost torch scikit-learn python-dotenv
@@ -67,7 +77,7 @@ The project's maintenance and development are structured around the football cal
    uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
-3. **Web Application (React/Vite):**
+4. **Web Application (React/Vite):**
    To run the web frontend, navigate to the `fpredict_web` directory, install dependencies, and run the development server:
    ```bash
    cd fpredict_web
@@ -84,7 +94,7 @@ The project's maintenance and development are structured around the football cal
    yarn run deploy
    ```
 
-4. **Mobile Application (Flutter):**
+5. **Mobile Application (Flutter):**
    To run the mobile app, navigate to the `fpredict_app` directory, get the Flutter dependencies, and run the app:
    ```bash
    cd fpredict_app
@@ -92,7 +102,7 @@ The project's maintenance and development are structured around the football cal
    flutter run
    ```
 
-5. **Supabase Functions:**
+6. **Supabase Functions:**
    To deploy the Supabase Edge Functions:
    ```bash
    supabase functions deploy <function_name> --no-verify-jwt
