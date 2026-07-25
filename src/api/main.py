@@ -33,6 +33,8 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = "fpredict_db"
 
+from src.ingestion.understat_deep_sync import UnderstatDeepSync
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: run the manager validation check
@@ -40,6 +42,12 @@ async def lifespan(app: FastAPI):
     repo = get_manager_repo()
     # Run the synchronous web scraping check in a threadpool so it doesn't block startup
     await loop.run_in_executor(None, validate_managers_on_startup, repo)
+    
+    # Run the player/team roster update async in the background
+    # This guarantees we always have an accurate, up-to-date player database on startup
+    syncer = UnderstatDeepSync()
+    asyncio.create_task(syncer.run())
+    
     yield
     # Shutdown logic (if any)
     repo.close()
