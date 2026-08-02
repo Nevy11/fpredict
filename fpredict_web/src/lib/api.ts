@@ -17,6 +17,28 @@ export type PredictionResult = {
     home_goals: number
     away_goals: number
   }>
+  player_predictions: {
+    home: Array<{
+      name: string
+      predicted_rating: number
+      stats: {
+        tackles: number
+        shots: number
+        dribbles: number
+        passes: number
+      }
+    }>
+    away: Array<{
+      name: string
+      predicted_rating: number
+      stats: {
+        tackles: number
+        shots: number
+        dribbles: number
+        passes: number
+      }
+    }>
+  }
 }
 
 export type TeamFeatures = {

@@ -14,6 +14,7 @@ import { Route as PlayersRouteImport } from './routes/players'
 import { Route as ManagersRouteImport } from './routes/managers'
 import { Route as FixturesRouteImport } from './routes/fixtures'
 import { Route as FeaturesRouteImport } from './routes/features'
+import { Route as FantasyRouteImport } from './routes/fantasy'
 import { Route as BacktestRouteImport } from './routes/backtest'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -43,6 +44,11 @@ const FeaturesRoute = FeaturesRouteImport.update({
   path: '/features',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FantasyRoute = FantasyRouteImport.update({
+  id: '/fantasy',
+  path: '/fantasy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BacktestRoute = BacktestRouteImport.update({
   id: '/backtest',
   path: '/backtest',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
+  '/fantasy': typeof FantasyRoute
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
+  '/fantasy': typeof FantasyRoute
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/backtest': typeof BacktestRoute
+  '/fantasy': typeof FantasyRoute
   '/features': typeof FeaturesRoute
   '/fixtures': typeof FixturesRoute
   '/managers': typeof ManagersRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/backtest'
+    | '/fantasy'
     | '/features'
     | '/fixtures'
     | '/managers'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/backtest'
+    | '/fantasy'
     | '/features'
     | '/fixtures'
     | '/managers'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/backtest'
+    | '/fantasy'
     | '/features'
     | '/fixtures'
     | '/managers'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   BacktestRoute: typeof BacktestRoute
+  FantasyRoute: typeof FantasyRoute
   FeaturesRoute: typeof FeaturesRoute
   FixturesRoute: typeof FixturesRoute
   ManagersRoute: typeof ManagersRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeaturesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fantasy': {
+      id: '/fantasy'
+      path: '/fantasy'
+      fullPath: '/fantasy'
+      preLoaderRoute: typeof FantasyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/backtest': {
       id: '/backtest'
       path: '/backtest'
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   BacktestRoute: BacktestRoute,
+  FantasyRoute: FantasyRoute,
   FeaturesRoute: FeaturesRoute,
   FixturesRoute: FixturesRoute,
   ManagersRoute: ManagersRoute,

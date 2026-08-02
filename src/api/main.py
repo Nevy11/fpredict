@@ -451,6 +451,57 @@ def predict(request: PredictionRequest):
     
     history = get_historical_matches(request.home_team, request.away_team)
 
+    import random
+    
+    # Mocking player predictions for the UI since we don't have real live player DB integration yet
+    # We select 2 top players for the home team and 2 for the away team.
+    player_predictions = {
+        "home": [
+            {
+                "name": f"{request.home_team} Star Striker",
+                "predicted_rating": round(random.uniform(7.0, 9.5), 1),
+                "stats": {
+                    "tackles": random.randint(0, 3),
+                    "shots": random.randint(2, 6),
+                    "dribbles": random.randint(1, 5),
+                    "passes": random.randint(20, 50)
+                }
+            },
+            {
+                "name": f"{request.home_team} Midfield Maestro",
+                "predicted_rating": round(random.uniform(6.5, 9.0), 1),
+                "stats": {
+                    "tackles": random.randint(2, 6),
+                    "shots": random.randint(0, 2),
+                    "dribbles": random.randint(2, 4),
+                    "passes": random.randint(40, 80)
+                }
+            }
+        ],
+        "away": [
+            {
+                "name": f"{request.away_team} Key Winger",
+                "predicted_rating": round(random.uniform(6.5, 9.2), 1),
+                "stats": {
+                    "tackles": random.randint(0, 2),
+                    "shots": random.randint(1, 4),
+                    "dribbles": random.randint(3, 7),
+                    "passes": random.randint(15, 35)
+                }
+            },
+            {
+                "name": f"{request.away_team} Rock Defender",
+                "predicted_rating": round(random.uniform(6.0, 8.5), 1),
+                "stats": {
+                    "tackles": random.randint(3, 8),
+                    "shots": random.randint(0, 1),
+                    "dribbles": random.randint(0, 2),
+                    "passes": random.randint(30, 60)
+                }
+            }
+        ]
+    }
+
     return {
         "away": probs[0] * 100,
         "draw": probs[1] * 100,
@@ -459,7 +510,8 @@ def predict(request: PredictionRequest):
         "value_bets": recs,
         "home_features": h_features,
         "away_features": a_features,
-        "historical_matches": history
+        "historical_matches": history,
+        "player_predictions": player_predictions
     }
 
 @app.websocket("/ws/odds")

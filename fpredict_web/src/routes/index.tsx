@@ -299,6 +299,80 @@ function Index() {
                   </div>
                 </div>
               )}
+
+              {predictionData.player_predictions && (
+                <div className="mt-4">
+                  <h4 className="panel-title flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                    Player Performance (Predicted)
+                  </h4>
+                  <div className="feature-grid">
+                    <div className="feature-card border border-cyan-500/20 bg-gradient-to-br from-cyan-950/30 to-transparent">
+                      <strong className="text-cyan-400 mb-2 block">{homeTeam} Key Players</strong>
+                      {predictionData.player_predictions.home.map((player, idx) => (
+                        <div key={idx} className="mb-3 last:mb-0 bg-black/40 p-2 rounded-md border border-white/5">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-semibold text-gray-200">{player.name}</span>
+                            <span className="text-cyan-400 font-bold bg-cyan-900/40 px-1.5 py-0.5 rounded text-xs">
+                              {player.predicted_rating.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1 text-[10px] text-center mt-2">
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Tkl</div>
+                              <div className="text-gray-300 font-bold">{player.stats.tackles}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Sht</div>
+                              <div className="text-gray-300 font-bold">{player.stats.shots}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Drb</div>
+                              <div className="text-gray-300 font-bold">{player.stats.dribbles}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Pas</div>
+                              <div className="text-gray-300 font-bold">{player.stats.passes}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="feature-card border border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-transparent">
+                      <strong className="text-purple-400 mb-2 block">{awayTeam} Key Players</strong>
+                      {predictionData.player_predictions.away.map((player, idx) => (
+                        <div key={idx} className="mb-3 last:mb-0 bg-black/40 p-2 rounded-md border border-white/5">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-semibold text-gray-200">{player.name}</span>
+                            <span className="text-purple-400 font-bold bg-purple-900/40 px-1.5 py-0.5 rounded text-xs">
+                              {player.predicted_rating.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1 text-[10px] text-center mt-2">
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Tkl</div>
+                              <div className="text-gray-300 font-bold">{player.stats.tackles}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Sht</div>
+                              <div className="text-gray-300 font-bold">{player.stats.shots}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Drb</div>
+                              <div className="text-gray-300 font-bold">{player.stats.dribbles}</div>
+                            </div>
+                            <div className="bg-white/5 p-1 rounded">
+                              <div className="text-gray-500 uppercase">Pas</div>
+                              <div className="text-gray-300 font-bold">{player.stats.passes}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
