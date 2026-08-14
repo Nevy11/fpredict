@@ -317,6 +317,8 @@ export type FantasyPlayer = {
   next_fixture: string
   fixture_difficulty: number
   form: string
+  is_available?: boolean
+  unavailable_reason?: string | null
 }
 
 export type FantasyTransfer = {
@@ -371,6 +373,12 @@ export type FantasyGuide = {
     }
   }
   guidance: string[]
+  availability?: {
+    checked_at: string | null
+    ready: boolean
+    unavailable_count: number
+    unavailable_players: { name: string; team: string; reason: string }[]
+  }
 }
 
 export function fetchFantasyGuide(gameweek?: number) {

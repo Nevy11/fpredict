@@ -49,11 +49,18 @@ class FantasyPlayer:
     fixture_difficulty: int  # 1 (easy) – 5 (hard)
     form: str
     is_injured: bool = False
+    is_suspended: bool = False
+    is_transferred: bool = False
+    unavailable_reason: str = ""
     ownership: float = 0.0
 
     @property
     def value(self) -> float:
         return self.projected_points / max(self.price, 4.0)
+
+    @property
+    def is_available(self) -> bool:
+        return not (self.is_injured or self.is_suspended or self.is_transferred)
 
 
 FALLBACK_PLAYERS: list[dict[str, Any]] = [
@@ -169,6 +176,52 @@ class FantasyEngine:
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self._team_elo: dict[str, float] = {}
+        self._availability: dict[str, dict[str, Any]] = {}
+        self._status_ready = False
+        self._last_status_check: str | None = None
+
+    def reload_availability(self) -> None:
+        from src.fantasy.player_validator import load_fantasy_availability
+        self._availability = load_fantasy_availability()
+        checked_times = [
+            v["checked_at"] for v in self._availability.values() if v.get("checked_at")
+        ]
+        self._last_status_check = max(checked_times) if checked_times else None
+        self._status_ready = True
+
+    def mark_status_ready(self, checked_at: str | None = None) -> None:
+        self.reload_availability()
+        if checked_at:
+            self._last_status_check = checked_at
+        self._status_ready = True
+
+    @property
+    def is_ready(self) -> bool:
+        return self._status_ready
+
+    def _apply_availability(self, player: FantasyPlayer) -> FantasyPlayer:
+        key = f"{player.name}|{player.team}"
+        status = self._availability.get(key)
+        if not status:
+            return player
+
+        player.is_injured = status.get("is_injured", False)
+        player.is_suspended = status.get("is_suspended", False) or status.get("is_banned", False)
+        player.is_transferred = status.get("is_transferred", False)
+        if status.get("news"):
+            player.unavailable_reason = status["news"]
+        elif player.is_suspended:
+            player.unavailable_reason = "Suspended"
+        elif player.is_injured:
+            player.unavailable_reason = "Injured"
+        elif player.is_transferred:
+            player.unavailable_reason = "Transferred"
+
+        new_team = status.get("current_team")
+        if new_team and not player.is_transferred and new_team != player.team:
+            player.team = new_team
+
+        return player
 
     def current_gameweek(self, as_of: date | None = None) -> int:
         today = as_of or date.today()
@@ -334,13 +387,16 @@ class FantasyEngine:
 
     def load_players(self) -> tuple[list[FantasyPlayer], str]:
         curated = self._players_from_fallback()
+        for i, player in enumerate(curated):
+            curated[i] = self._apply_availability(player)
+
         db_players = self._players_from_db()
         if db_players:
             db_by_name = {p.name.lower(): p for p in db_players}
             for player in curated:
                 match = db_by_name.get(player.name.lower())
                 if match:
-                    player.is_injured = match.is_injured
+                    player.is_injured = player.is_injured or match.is_injured
                     if match.form == "Excellent" and player.form != "Excellent":
                         player.form = "Good"
             return curated, "curated+database"
@@ -376,7 +432,7 @@ class FantasyEngine:
         return cost
 
     def optimize_squad(self, players: list[FantasyPlayer]) -> list[FantasyPlayer]:
-        available = [p for p in players if not p.is_injured]
+        available = [p for p in players if p.is_available]
         squad: list[FantasyPlayer] = []
         team_counts: dict[str, int] = {}
         spent = 0.0
@@ -683,9 +739,34 @@ class FantasyEngine:
             "next_fixture": p.next_fixture,
             "fixture_difficulty": p.fixture_difficulty,
             "form": p.form,
+            "is_available": p.is_available,
+            "unavailable_reason": p.unavailable_reason or None,
+        }
+
+    def _availability_summary(self, players: list[FantasyPlayer]) -> dict[str, Any]:
+        unavailable = [
+            {
+                "name": p.name,
+                "team": p.team,
+                "reason": p.unavailable_reason or (
+                    "Injured" if p.is_injured else
+                    "Suspended" if p.is_suspended else
+                    "Transferred" if p.is_transferred else "Unavailable"
+                ),
+            }
+            for p in players if not p.is_available
+        ]
+        return {
+            "checked_at": self._last_status_check,
+            "ready": self._status_ready,
+            "unavailable_count": len(unavailable),
+            "unavailable_players": unavailable,
         }
 
     def get_guide(self, gameweek: int | None = None) -> dict[str, Any]:
+        if not self._status_ready:
+            raise RuntimeError("Fantasy engine not ready — player availability check pending.")
+
         gw = gameweek or self.current_gameweek()
         players, source = self.load_players()
         squad = self.optimize_squad(players)
@@ -720,6 +801,7 @@ class FantasyEngine:
             },
             "transfers": transfers,
             "chips": chips,
+            "availability": self._availability_summary(players),
             "guidance": self._weekly_guidance(gw, xi, transfers, chips),
         }
 

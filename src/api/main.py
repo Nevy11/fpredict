@@ -28,6 +28,7 @@ from src.models.manager_engine import ManagerPredictionEngine
 from src.managers.repository import ManagerRepository
 from src.managers.validator import validate_managers_on_startup
 from src.fantasy.engine import FantasyEngine
+from src.fantasy.player_validator import validate_players_on_startup
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
@@ -38,19 +39,18 @@ from src.ingestion.understat_deep_sync import UnderstatDeepSync
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: run the manager validation check
     loop = asyncio.get_running_loop()
     repo = get_manager_repo()
-    # Run the synchronous web scraping check in a threadpool so it doesn't block startup
     await loop.run_in_executor(None, validate_managers_on_startup, repo)
-    
-    # Run the player/team roster update async in the background
-    # This guarantees we always have an accurate, up-to-date player database on startup
+
+    # Player injury / transfer / ban check — must complete before fantasy engine serves
+    status = await loop.run_in_executor(None, validate_players_on_startup)
+    get_fantasy_engine().mark_status_ready(status.get("checked_at"))
+
     syncer = UnderstatDeepSync()
     asyncio.create_task(syncer.run())
-    
+
     yield
-    # Shutdown logic (if any)
     repo.close()
 
 app = FastAPI(title="FPredict API", lifespan=lifespan)
@@ -178,7 +178,13 @@ def list_teams():
 
 @app.get("/fantasy/guide")
 def fantasy_guide(gameweek: int | None = None):
-    guide = get_fantasy_engine().get_guide(gameweek)
+    engine_f = get_fantasy_engine()
+    if not engine_f.is_ready:
+        raise HTTPException(status_code=503, detail="Fantasy engine is loading player availability data.")
+    try:
+        guide = engine_f.get_guide(gameweek)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return convert_to_native(guide)
 
 @app.get("/fantasy/gameweek")

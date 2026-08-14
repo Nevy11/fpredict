@@ -96,6 +96,30 @@ function FantasyPage() {
 
       {guide && !loading && (
         <>
+          {guide.availability && guide.availability.unavailable_count > 0 && (
+            <div className="status-banner mb-6 flex flex-col gap-2 border-amber-500/30 bg-amber-500/10">
+              <div className="flex items-center gap-2 text-amber-200 font-semibold text-sm">
+                <AlertCircle size={16} />
+                {guide.availability.unavailable_count} player{guide.availability.unavailable_count !== 1 ? 's' : ''} excluded (injured, suspended, or transferred)
+                {guide.availability.checked_at && (
+                  <span className="text-xs font-normal text-amber-200/70 ml-auto">
+                    FPL check: {new Date(guide.availability.checked_at).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {guide.availability.unavailable_players.map((p) => (
+                  <span
+                    key={`${p.name}-${p.team}`}
+                    className="text-xs px-2 py-1 rounded-full bg-black/30 border border-amber-500/20 text-amber-100/90"
+                  >
+                    {p.name} — {p.reason}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* GW Header + Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <StatCard
