@@ -41,9 +41,9 @@ class BrowserScraper(BaseScraper):
                 
                 # 3. Wait for content
                 try:
-                    await page.wait_for_selector("table", timeout=60000)
+                    await page.wait_for_selector("table", timeout=10000)
                 except:
-                    print("Warning: Content table not found after 60s.")
+                    print("Warning: Content table not found after 10s.")
                 content = await page.content()
                 print(f"Successfully fetched {len(content)} characters.")
                 return content

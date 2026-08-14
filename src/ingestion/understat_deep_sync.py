@@ -78,8 +78,10 @@ class UnderstatDeepSync:
                     pos = str(row['Pos'])
                     
                     xg_raw = str(row['xG'])
-                    xg_base = xg_raw.split('+')[0].split('-')[0]
-                    xg = float(xg_base)
+                    import re
+                    # Extract the first float-like or int-like sequence, handling formats like 'xG 7.01' or '7.01+0.5'
+                    match = re.search(r'(\d+(?:\.\d+)?)', xg_raw)
+                    xg = float(match.group(1)) if match else 0.0
                     
                     # Clamp for numeric(5,4)
                     if xg > 9.999: xg = 9.999
