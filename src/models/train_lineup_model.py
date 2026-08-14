@@ -136,4 +136,4 @@ def train(use_real_db=False):
     print(f"Model successfully trained and saved to {save_path}")
 
 if __name__ == "__main__":
-    train()
+    train(use_real_db=True)

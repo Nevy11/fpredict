@@ -356,9 +356,24 @@ def validate_players_on_startup() -> dict[str, Any]:
                         new_team = cur.fetchone()
                         if new_team:
                             cur.execute(
-                                "UPDATE players SET team_id = %s WHERE id = %s",
-                                (new_team[0], player_id),
+                                """
+                                SELECT id FROM players
+                                WHERE name = %s AND team_id = %s AND id != %s
+                                LIMIT 1
+                                """,
+                                (name, new_team[0], player_id),
                             )
+                            if not cur.fetchone():
+                                try:
+                                    cur.execute(
+                                        "UPDATE players SET team_id = %s WHERE id = %s",
+                                        (new_team[0], player_id),
+                                    )
+                                except Exception as exc:
+                                    conn.rollback()
+                                    summary["errors"].append(
+                                        f"team move skipped for {name}: {exc}"
+                                    )
                             is_transferred = False
 
                     reason = status["reason"]

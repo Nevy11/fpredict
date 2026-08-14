@@ -13,25 +13,30 @@ class LineupDatasetBuilder:
     def __init__(self):
         self.conn = psycopg2.connect(LOCAL_DB_URL)
         
-    def get_match_lineup(self, match_id, team_id):
+    def get_match_lineup(self, match_date, team_id):
         """
-        Fetch the 11 starting players and their stats for a given match and team.
+        Fetch the top 11 players and their stats for a given team on a given date.
         """
         query = """
             SELECT 
                 p.id as player_id,
-                COALESCE(ps.minutes_played, 0) as minutes_played,
-                COALESCE(ps.xg_contribution, 0.0) as xg_contribution,
-                COALESCE(ps.progressive_passes, 0) as progressive_passes,
-                COALESCE(ps.pressing_regains, 0) as pressing_regains,
-                COALESCE(ps.rating_score, 0.0) as rating_score
-            FROM player_performance ps
-            JOIN players p ON p.id = ps.player_id
-            WHERE ps.match_id = %s AND p.team_id = %s
-            ORDER BY ps.minutes_played DESC
+                COALESCE(pim.impact_score, 0.0) as rating_score,
+                0.0 as xg_contribution,
+                0.0 as progressive_passes,
+                0.0 as pressing_regains,
+                0.0 as minutes_played
+            FROM players p
+            LEFT JOIN LATERAL (
+                SELECT impact_score 
+                FROM player_impact_metrics 
+                WHERE player_id = p.id AND snapshot_date <= %s
+                ORDER BY snapshot_date DESC LIMIT 1
+            ) pim ON true
+            WHERE p.team_id = %s
+            ORDER BY pim.impact_score DESC NULLS LAST
             LIMIT 11;
         """
-        return pd.read_sql(query, self.conn, params=(match_id, team_id))
+        return pd.read_sql(query, self.conn, params=(match_date, team_id))
 
     def build_dataset(self, num_player_features=5, num_manager_features=3):
         """
@@ -81,8 +86,8 @@ class LineupDatasetBuilder:
             a_name = match['away_team_name']
             
             # Fetch Lineups
-            h_lineup = self.get_match_lineup(m_id, h_id)
-            a_lineup = self.get_match_lineup(m_id, a_id)
+            h_lineup = self.get_match_lineup(match['match_date'], h_id)
+            a_lineup = self.get_match_lineup(match['match_date'], a_id)
             
             # Skip if we don't have exactly 11 players recorded
             if len(h_lineup) != 11 or len(a_lineup) != 11:
