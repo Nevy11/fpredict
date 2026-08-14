@@ -389,3 +389,48 @@ export function fetchFantasyGuide(gameweek?: number) {
 export function fetchFantasyGameweek() {
   return request<{ gameweek: number; deadline: string; season: string }>('/fantasy/gameweek')
 }
+
+export type TowerCFixture = {
+  id: string
+  home_team: string
+  away_team: string
+  match_date: string
+  competition: string
+}
+
+export type TowerCPlayerExpected = {
+  minutes: number
+  xg: number
+  progressive_passes: number
+  pressing_regains: number
+}
+
+export type TowerCPlayer = {
+  name: string
+  position: string
+  predicted_rating: number
+  expected: TowerCPlayerExpected
+}
+
+export type TowerCPrediction = {
+  home_team: string
+  away_team: string
+  model_ready: boolean
+  source: 'tower_c_model' | 'tower_c_heuristic'
+  lineup_complete: boolean
+  match_probs: { home: number; draw: number; away: number }
+  home_lineup: TowerCPlayer[]
+  away_lineup: TowerCPlayer[]
+}
+
+export function fetchTowerCFixtures(limit = 30) {
+  return request<{ fixtures: TowerCFixture[] }>(`/tower-c/fixtures?limit=${limit}`)
+}
+
+export function fetchTowerCPrediction(homeTeam: string, awayTeam: string) {
+  return request<TowerCPrediction>('/tower-c/predict', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ home_team: homeTeam, away_team: awayTeam }),
+  })
+}

@@ -184,6 +184,39 @@ def resolve_display_team_name(db_name: str) -> str:
 def list_teams():
     return FRONTEND_TEAMS
 
+@app.get("/tower-c/fixtures")
+def tower_c_fixtures(limit: int = 30):
+    engine_c = get_lineup_engine()
+    fixtures = engine_c.get_upcoming_fixtures(limit=max(1, min(limit, 50)))
+    return {"fixtures": fixtures}
+
+@app.post("/tower-c/predict")
+def tower_c_predict(request: PredictionRequest):
+    db_home = resolve_db_team_name(request.home_team)
+    db_away = resolve_db_team_name(request.away_team)
+    h_features = get_team_features(request.home_team)
+    a_features = get_team_features(request.away_team)
+
+    engine_c = get_lineup_engine()
+    try:
+        result = engine_c.predict(
+            request.home_team,
+            request.away_team,
+            home_elo=h_features["elo"],
+            away_elo=a_features["elo"],
+        )
+    except Exception as error:
+        print(f"Tower C prediction error: {error}")
+        raise HTTPException(status_code=500, detail="Tower C prediction failed") from error
+
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No player data available for {request.home_team} vs {request.away_team}",
+        )
+
+    return convert_to_native(result)
+
 @app.get("/fantasy/guide")
 def fantasy_guide(gameweek: int | None = None):
     engine_f = get_fantasy_engine()
@@ -488,17 +521,14 @@ def predict(request: PredictionRequest):
     
     history = get_historical_matches(request.home_team, request.away_team)
 
-    lineup_engine = get_lineup_engine()
-    db_home = resolve_db_team_name(request.home_team)
-    db_away = resolve_db_team_name(request.away_team)
-    
     try:
-        lineup_result = lineup_engine.predict(db_home, db_away)
-        if lineup_result:
-            player_predictions = lineup_result["player_predictions"]
-            # Can also blend the lineup match_probs here if desired in the future
-        else:
-            player_predictions = {"home": [], "away": []}
+        lineup_result = get_lineup_engine().predict(
+            request.home_team,
+            request.away_team,
+            home_elo=h_features["elo"],
+            away_elo=a_features["elo"],
+        )
+        player_predictions = lineup_result["player_predictions"] if lineup_result else {"home": [], "away": []}
     except Exception as e:
         print(f"Lineup engine error: {e}")
         player_predictions = {"home": [], "away": []}

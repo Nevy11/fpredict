@@ -1,174 +1,274 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
-import { Users, Search, BrainCircuit, Activity, Target } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  Users,
+  CalendarDays,
+  Loader2,
+  AlertCircle,
+  BrainCircuit,
+  Trophy,
+  ChevronRight,
+} from 'lucide-react'
+import {
+  fetchTowerCFixtures,
+  fetchTowerCPrediction,
+  type TowerCFixture,
+  type TowerCPrediction,
+  type TowerCPlayer,
+} from '../lib/api'
 
 export const Route = createFileRoute('/players')({
   component: PlayersPage,
+  ssr: false,
 })
 
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function PlayerRow({ player, accent }: { player: TowerCPlayer; accent: 'cyan' | 'purple' }) {
+  const ratingClass = accent === 'cyan' ? 'text-cyan-400 bg-cyan-900/40' : 'text-purple-400 bg-purple-900/40'
+  return (
+    <div className="bg-black/40 p-3 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+      <div className="flex justify-between items-start gap-2 mb-2">
+        <div className="min-w-0">
+          <div className="font-semibold text-white truncate">{player.name}</div>
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">{player.position}</span>
+        </div>
+        <span className={`shrink-0 font-bold px-2 py-0.5 rounded text-xs ${ratingClass}`}>
+          {player.predicted_rating.toFixed(1)}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-1 text-[10px] text-center">
+        <StatCell label="MIN" value={player.expected.minutes} />
+        <StatCell label="xG" value={player.expected.xg.toFixed(2)} />
+        <StatCell label="Prog" value={player.expected.progressive_passes} />
+        <StatCell label="Press" value={player.expected.pressing_regains} />
+      </div>
+    </div>
+  )
+}
+
+function StatCell({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="bg-white/5 p-1.5 rounded">
+      <div className="text-gray-500 uppercase">{label}</div>
+      <div className="text-gray-200 font-bold">{value}</div>
+    </div>
+  )
+}
+
+function MatchProbBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-400">{label}</span>
+        <span className="font-bold text-white">{value.toFixed(1)}%</span>
+      </div>
+      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(value, 100)}%` }} />
+      </div>
+    </div>
+  )
+}
+
 function PlayersPage() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [aiQuery, setAiQuery] = useState('')
-  const [selectedPlayer, setSelectedPlayer] = useState<any>(null)
-  const [chatHistory, setChatHistory] = useState([
-    { role: 'assistant', text: 'Initialize player sub-agent. Who would you like to analyze or train me on today?' }
-  ])
+  const [fixtures, setFixtures] = useState<TowerCFixture[]>([])
+  const [selected, setSelected] = useState<TowerCFixture | null>(null)
+  const [prediction, setPrediction] = useState<TowerCPrediction | null>(null)
+  const [loadingFixtures, setLoadingFixtures] = useState(true)
+  const [loadingPrediction, setLoadingPrediction] = useState(false)
+  const [error, setError] = useState('')
 
-  // Mock data for players (since full DB might not be exposed via API yet)
-  const mockPlayers = [
-    { id: '1', name: 'Erling Haaland', team: 'Manchester City', position: 'FW', xg: 0.95, form: 'Excellent', impact: 8.4 },
-    { id: '2', name: 'Bukayo Saka', team: 'Arsenal', position: 'FW', xg: 0.65, form: 'Good', impact: 7.9 },
-    { id: '3', name: 'Mohamed Salah', team: 'Liverpool', position: 'FW', xg: 0.72, form: 'Excellent', impact: 8.1 },
-    { id: '4', name: 'Martin Ødegaard', team: 'Arsenal', position: 'MF', xg: 0.25, form: 'Good', impact: 7.6 },
-    { id: '5', name: 'Rodri', team: 'Manchester City', position: 'MF', xg: 0.15, form: 'Excellent', impact: 8.5 },
-  ]
+  useEffect(() => {
+    let cancelled = false
+    setLoadingFixtures(true)
+    fetchTowerCFixtures()
+      .then(({ fixtures: loaded }) => {
+        if (cancelled) return
+        setFixtures(loaded)
+        if (loaded.length > 0) setSelected(loaded[0])
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load fixtures')
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFixtures(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
-  const filteredPlayers = mockPlayers.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.team.toLowerCase().includes(searchTerm.toLowerCase()))
-
-  const handleAiSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!aiQuery.trim()) return
-    
-    setChatHistory(prev => [...prev, { role: 'user', text: aiQuery }])
-    
-    // Simulate AI response
-    setTimeout(() => {
-      setChatHistory(prev => [...prev, { 
-        role: 'assistant', 
-        text: `Based on the latest vectors, the tactical blueprint suggests this player has a high expected goal (xG) variance against low-block defenses. I've updated my internal weights.`
-      }])
-    }, 1000)
-    
-    setAiQuery('')
-  }
+  useEffect(() => {
+    if (!selected) return
+    let cancelled = false
+    setLoadingPrediction(true)
+    setError('')
+    fetchTowerCPrediction(selected.home_team, selected.away_team)
+      .then((result) => {
+        if (!cancelled) setPrediction(result)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPrediction(null)
+          setError(err instanceof Error ? err.message : 'Tower C prediction failed')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPrediction(false)
+      })
+    return () => { cancelled = true }
+  }, [selected])
 
   return (
     <div className="container page-stack pb-20">
-      <header className="page-header flex flex-col items-center text-center mt-8 mb-12">
+      <header className="page-header flex flex-col items-center text-center mt-8 mb-10">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-cyan-400 text-sm font-semibold tracking-widest uppercase mb-6 backdrop-blur-md">
-          <Users size={16} />
-          <span>Player Database & AI</span>
+          <BrainCircuit size={16} />
+          <span>Tower C · Lineup Synergy Model</span>
         </div>
         <h1 className="heading-primary text-5xl md:text-6xl mb-4">Player Intelligence</h1>
         <p className="subtitle text-lg max-w-2xl text-gray-400 mx-auto">
-          Teach the AI about specific players, analyze expected goals against specific opponents, and explore individual performance vectors.
+          Expected match outcomes and per-player performance vectors from the 11v11 synergy model — minutes, xG, progressive passes, and pressing regains.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column: Player Directory */}
-        <div className="lg:col-span-2 glass-card p-6 flex flex-col h-[700px]">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-              Active Roster
-            </h2>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search players..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-black/30 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors"
-              />
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        {/* Fixtures sidebar */}
+        <div className="xl:col-span-3 glass-card p-5 flex flex-col max-h-[820px]">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+            <CalendarDays size={18} className="text-cyan-400" />
+            <h2 className="text-lg font-bold text-white">Upcoming Games</h2>
+          </div>
+
+          {loadingFixtures ? (
+            <div className="flex items-center justify-center flex-1 text-gray-400 gap-2">
+              <Loader2 size={20} className="animate-spin" />
+              <span className="text-sm">Loading fixtures…</span>
             </div>
-          </div>
-          
-          <div className="overflow-y-auto custom-scrollbar flex-1 pr-2">
-            <table className="data-table w-full">
-              <thead className="sticky top-0 bg-black/80 backdrop-blur-md z-10">
-                <tr>
-                  <th>Player</th>
-                  <th>Team</th>
-                  <th>Pos</th>
-                  <th>xG/90</th>
-                  <th>Impact</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPlayers.map(player => (
-                  <tr 
-                    key={player.id} 
-                    className={`cursor-pointer hover:bg-white/5 transition-colors ${selectedPlayer?.id === player.id ? 'bg-cyan-500/10 border-l-2 border-cyan-500' : ''}`}
-                    onClick={() => setSelectedPlayer(player)}
+          ) : fixtures.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-8">No upcoming fixtures found.</p>
+          ) : (
+            <div className="overflow-y-auto custom-scrollbar flex flex-col gap-2 pr-1">
+              {fixtures.map((fixture) => {
+                const isActive = selected?.id === fixture.id
+                return (
+                  <button
+                    key={fixture.id}
+                    type="button"
+                    onClick={() => setSelected(fixture)}
+                    className={`text-left p-3 rounded-xl border transition-all ${
+                      isActive
+                        ? 'bg-cyan-500/10 border-cyan-500/40 shadow-lg shadow-cyan-500/5'
+                        : 'bg-black/20 border-white/5 hover:border-white/15 hover:bg-white/5'
+                    }`}
                   >
-                    <td className="font-semibold text-white">{player.name}</td>
-                    <td>{player.team}</td>
-                    <td>
-                      <span className="px-2 py-1 rounded bg-white/10 text-xs font-bold text-gray-300">
-                        {player.position}
-                      </span>
-                    </td>
-                    <td className="text-cyan-400 font-medium">{player.xg.toFixed(2)}</td>
-                    <td className="text-purple-400 font-medium">{player.impact.toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
+                      {formatDate(fixture.match_date)} · {fixture.competition}
+                    </div>
+                    <div className="font-semibold text-white text-sm leading-snug">
+                      {fixture.home_team}
+                    </div>
+                    <div className="text-xs text-gray-500 my-0.5">vs</div>
+                    <div className="font-semibold text-gray-300 text-sm leading-snug">
+                      {fixture.away_team}
+                    </div>
+                    {isActive && <ChevronRight size={14} className="text-cyan-400 mt-2 ml-auto" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Right Column: AI Training & Analysis */}
-        <div className="glass-card p-6 flex flex-col h-[700px] border-cyan-500/20 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 blur-[80px] rounded-full pointer-events-none" />
-          
-          <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-            <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30">
-              <BrainCircuit size={20} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Player AI Model</h2>
-              <p className="text-xs text-cyan-400/80 uppercase tracking-wider font-semibold">Training Module</p>
-            </div>
-          </div>
-
-          {selectedPlayer ? (
-            <div className="mb-4 bg-black/40 border border-white/5 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-400">Target</div>
-                <div className="font-bold text-white">{selectedPlayer.name}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-400">Impact Score</div>
-                <div className="font-black text-cyan-400 text-lg">{selectedPlayer.impact}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4 bg-black/20 border border-white/5 rounded-xl p-4 text-center text-sm text-gray-500">
-              Select a player to focus the AI context.
+        {/* Main prediction panel */}
+        <div className="xl:col-span-9 flex flex-col gap-6">
+          {error && (
+            <div className="flex items-center gap-2 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+              <AlertCircle size={18} />
+              {error}
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 pr-2 mb-4">
-            {chatHistory.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-cyan-600/30 text-white border border-cyan-500/30' 
-                    : 'bg-white/5 text-gray-300 border border-white/10'
-                }`}>
-                  {msg.text}
+          {!selected ? (
+            <div className="glass-card p-12 text-center text-gray-500">
+              Select a fixture to run Tower C predictions.
+            </div>
+          ) : loadingPrediction ? (
+            <div className="glass-card p-16 flex flex-col items-center justify-center text-gray-400 gap-3">
+              <Loader2 size={32} className="animate-spin text-cyan-400" />
+              <span>Running Tower C on {selected.home_team} vs {selected.away_team}…</span>
+            </div>
+          ) : prediction ? (
+            <>
+              {/* Match header + outcome */}
+              <div className="glass-card p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      {prediction.home_team}{' '}
+                      <span className="text-gray-500 font-normal">vs</span>{' '}
+                      {prediction.away_team}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      {selected ? formatDate(selected.match_date) : ''}
+                      {' · '}
+                      Source:{' '}
+                      <span className={prediction.model_ready ? 'text-emerald-400' : 'text-amber-400'}>
+                        {prediction.source === 'tower_c_model' ? 'Trained model' : 'Impact heuristic'}
+                      </span>
+                      {!prediction.lineup_complete && (
+                        <span className="text-amber-400/80"> · Partial lineup (&lt;11 players)</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-gray-400">
+                    <Trophy size={14} className="text-yellow-400" />
+                    Match outcome (Tower C)
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <MatchProbBar label={`${prediction.home_team} win`} value={prediction.match_probs.home} color="bg-cyan-500" />
+                  <MatchProbBar label="Draw" value={prediction.match_probs.draw} color="bg-gray-400" />
+                  <MatchProbBar label={`${prediction.away_team} win`} value={prediction.match_probs.away} color="bg-purple-500" />
                 </div>
               </div>
-            ))}
-          </div>
 
-          <form onSubmit={handleAiSubmit} className="relative mt-auto">
-            <input 
-              type="text"
-              value={aiQuery}
-              onChange={e => setAiQuery(e.target.value)}
-              placeholder="Teach the AI about this player..."
-              className="w-full bg-black/40 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors"
-            />
-            <button 
-              type="submit"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/40 transition-colors"
-            >
-              <Target size={16} />
-            </button>
-          </form>
+              {/* Full lineups */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="glass-card p-5 border-cyan-500/20">
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+                    <Users size={18} className="text-cyan-400" />
+                    <h3 className="font-bold text-cyan-400">{prediction.home_team}</h3>
+                    <span className="ml-auto text-xs text-gray-500">{prediction.home_lineup.length} players</span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                    {prediction.home_lineup.map((player, idx) => (
+                      <PlayerRow key={`${player.name}-${idx}`} player={player} accent="cyan" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-card p-5 border-purple-500/20">
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+                    <Users size={18} className="text-purple-400" />
+                    <h3 className="font-bold text-purple-400">{prediction.away_team}</h3>
+                    <span className="ml-auto text-xs text-gray-500">{prediction.away_lineup.length} players</span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                    {prediction.away_lineup.map((player, idx) => (
+                      <PlayerRow key={`${player.name}-${idx}`} player={player} accent="purple" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-600 text-center">
+                Expected outcomes: minutes played, xG contribution, progressive passes, pressing regains, and predicted match rating (1–10 scale).
+              </p>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

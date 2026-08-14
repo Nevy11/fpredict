@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from lineup_match_model import LineupMatchModel
+from src.models.lineup_match_model import LineupMatchModel
 
 def generate_synthetic_lineup_data(num_samples=10000, num_player_features=10, num_manager_features=5, num_player_outputs=5):
     """
