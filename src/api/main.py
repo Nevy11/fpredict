@@ -27,6 +27,7 @@ from src.models.simulator import FPredictSimulator
 from src.models.manager_engine import ManagerPredictionEngine
 from src.managers.repository import ManagerRepository
 from src.managers.validator import validate_managers_on_startup
+from src.fantasy.engine import FantasyEngine
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
@@ -63,8 +64,15 @@ app.add_middleware(
 )
 
 engine = FPredictEngine()
+_fantasy_engine = None
 _manager_engine = None
 _manager_repo = None
+
+def get_fantasy_engine():
+    global _fantasy_engine
+    if _fantasy_engine is None:
+        _fantasy_engine = FantasyEngine()
+    return _fantasy_engine
 
 def get_manager_engine():
     global _manager_engine
@@ -167,6 +175,21 @@ def resolve_display_team_name(db_name: str) -> str:
 @app.get("/teams")
 def list_teams():
     return FRONTEND_TEAMS
+
+@app.get("/fantasy/guide")
+def fantasy_guide(gameweek: int | None = None):
+    guide = get_fantasy_engine().get_guide(gameweek)
+    return convert_to_native(guide)
+
+@app.get("/fantasy/gameweek")
+def fantasy_gameweek():
+    engine_f = get_fantasy_engine()
+    gw = engine_f.current_gameweek()
+    return {
+        "gameweek": gw,
+        "deadline": engine_f._deadline_label(gw),
+        "season": "2025/26",
+    }
 
 @app.get("/features/{team_name}")
 def get_feature_series(team_name: str):

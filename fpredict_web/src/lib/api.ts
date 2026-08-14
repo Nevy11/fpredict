@@ -306,3 +306,78 @@ export function fetchManagerPrediction(params: {
     }),
   })
 }
+
+export type FantasyPlayer = {
+  id: string
+  name: string
+  team: string
+  position: string
+  price: number
+  projected_points: number
+  next_fixture: string
+  fixture_difficulty: number
+  form: string
+}
+
+export type FantasyTransfer = {
+  out: FantasyPlayer
+  in: FantasyPlayer
+  points_gain: number
+  cost_delta: number
+  priority: 'High' | 'Medium' | 'Low'
+  reason: string
+}
+
+export type FantasyChip = {
+  chip: string
+  status: string
+  recommended_window: string
+  rating: 'High' | 'Medium' | 'Low'
+  advice: string
+}
+
+export type FantasyGuide = {
+  gameweek: number
+  deadline: string
+  data_source: string
+  budget: { total: number; spent: number; remaining: number }
+  best_squad: {
+    players: FantasyPlayer[]
+    starting_xi: FantasyPlayer[]
+    bench: FantasyPlayer[]
+    captain: FantasyPlayer
+    vice_captain: FantasyPlayer
+    formation: string
+    total_projected_points: number
+    starting_xi_projected: number
+    captain_projected: number
+  }
+  transfers: {
+    gameweek: number
+    free_transfers: number
+    recommended_action: 'Hold' | 'Transfer'
+    transfers: FantasyTransfer[]
+    all_suggestions: FantasyTransfer[]
+    watchlist: FantasyTransfer[]
+    summary: string
+  }
+  chips: {
+    gameweek: number
+    chips: FantasyChip[]
+    priority_order: string[]
+    calendar_notes: {
+      blank_gameweeks: number[]
+      double_gameweeks: number[]
+    }
+  }
+  guidance: string[]
+}
+
+export function fetchFantasyGuide(gameweek?: number) {
+  const query = gameweek ? `?gameweek=${gameweek}` : ''
+  return request<FantasyGuide>(`/fantasy/guide${query}`)
+}
+
+export function fetchFantasyGameweek() {
+  return request<{ gameweek: number; deadline: string; season: string }>('/fantasy/gameweek')
+}
