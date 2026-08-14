@@ -29,6 +29,7 @@ from src.managers.repository import ManagerRepository
 from src.managers.validator import validate_managers_on_startup
 from src.fantasy.engine import FantasyEngine
 from src.fantasy.player_validator import validate_players_on_startup
+from src.models.lineup_engine import LineupEngine
 
 load_dotenv()
 DB_USER = os.getenv("DB_USER")
@@ -67,6 +68,13 @@ engine = FPredictEngine()
 _fantasy_engine = None
 _manager_engine = None
 _manager_repo = None
+_lineup_engine = None
+
+def get_lineup_engine():
+    global _lineup_engine
+    if _lineup_engine is None:
+        _lineup_engine = LineupEngine()
+    return _lineup_engine
 
 def get_fantasy_engine():
     global _fantasy_engine
@@ -480,56 +488,20 @@ def predict(request: PredictionRequest):
     
     history = get_historical_matches(request.home_team, request.away_team)
 
-    import random
+    lineup_engine = get_lineup_engine()
+    db_home = resolve_db_team_name(request.home_team)
+    db_away = resolve_db_team_name(request.away_team)
     
-    # Mocking player predictions for the UI since we don't have real live player DB integration yet
-    # We select 2 top players for the home team and 2 for the away team.
-    player_predictions = {
-        "home": [
-            {
-                "name": f"{request.home_team} Star Striker",
-                "predicted_rating": round(random.uniform(7.0, 9.5), 1),
-                "stats": {
-                    "tackles": random.randint(0, 3),
-                    "shots": random.randint(2, 6),
-                    "dribbles": random.randint(1, 5),
-                    "passes": random.randint(20, 50)
-                }
-            },
-            {
-                "name": f"{request.home_team} Midfield Maestro",
-                "predicted_rating": round(random.uniform(6.5, 9.0), 1),
-                "stats": {
-                    "tackles": random.randint(2, 6),
-                    "shots": random.randint(0, 2),
-                    "dribbles": random.randint(2, 4),
-                    "passes": random.randint(40, 80)
-                }
-            }
-        ],
-        "away": [
-            {
-                "name": f"{request.away_team} Key Winger",
-                "predicted_rating": round(random.uniform(6.5, 9.2), 1),
-                "stats": {
-                    "tackles": random.randint(0, 2),
-                    "shots": random.randint(1, 4),
-                    "dribbles": random.randint(3, 7),
-                    "passes": random.randint(15, 35)
-                }
-            },
-            {
-                "name": f"{request.away_team} Rock Defender",
-                "predicted_rating": round(random.uniform(6.0, 8.5), 1),
-                "stats": {
-                    "tackles": random.randint(3, 8),
-                    "shots": random.randint(0, 1),
-                    "dribbles": random.randint(0, 2),
-                    "passes": random.randint(30, 60)
-                }
-            }
-        ]
-    }
+    try:
+        lineup_result = lineup_engine.predict(db_home, db_away)
+        if lineup_result:
+            player_predictions = lineup_result["player_predictions"]
+            # Can also blend the lineup match_probs here if desired in the future
+        else:
+            player_predictions = {"home": [], "away": []}
+    except Exception as e:
+        print(f"Lineup engine error: {e}")
+        player_predictions = {"home": [], "away": []}
 
     return {
         "away": probs[0] * 100,

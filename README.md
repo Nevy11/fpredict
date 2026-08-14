@@ -240,9 +240,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 ### Python dependencies
 
 ```bash
-pip install fastapi uvicorn pydantic httpx pandas psycopg2-binary xgboost torch \
-  scikit-learn python-dotenv supabase playwright curl_cffi beautifulsoup4 \
-  transformers joblib
+pip install -r requirements.txt
 playwright install chromium
 ```
 
